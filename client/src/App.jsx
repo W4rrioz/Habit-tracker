@@ -4,7 +4,7 @@ import AppLayout from './components/AppLayout';
 
 import DashboardPage from './pages/DashboardPage';
 import LoginPage from './pages/LoginPage';
-import SignupPage from './pages/SignupPage';
+import SignUpPage from './pages/SignUpPage';
 import HabitsPage from './pages/HabitsPage';
 import HabitDetailPage from './pages/HabitDetailPage';
 import HabitFormPage from './pages/HabitFormPage';
@@ -20,7 +20,7 @@ export default function App() {
     <Routes>
       {/* Public Auth Pages */}
       <Route path="/login" element={<LoginPage />} />
-      <Route path="/signup" element={<SignupPage />} />
+      <Route path="/signup" element={<SignUpPage />} />
 
       {/* Main App Layout Routes */}
       <Route element={<AppLayout />}>
