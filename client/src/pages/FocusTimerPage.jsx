@@ -1,12 +1,11 @@
-import React, { useState, useEffect, useRef } from 'react';
+﻿import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 
 export default function FocusTimerPage() {
   const { user } = useAuth();
 
-  // Timer modes in minutes
   const MODES = [
-    { label: '25 min', minutes: 25, title: 'Deep Focus' },
+    { label: '25 min', minutes: 25, title: 'Deep Flow State' },
     { label: '5 min', minutes: 5, title: 'Short Break' },
     { label: '15 min', minutes: 15, title: 'Long Break' },
   ];
@@ -20,7 +19,6 @@ export default function FocusTimerPage() {
 
   // Today's Stats
   const [todayStats, setTodayStats] = useState({ total_sessions: 0, total_minutes: 0 });
-  const [loadingStats, setLoadingStats] = useState(true);
 
   const timerRef = useRef(null);
   const endTimeRef = useRef(null);
@@ -49,7 +47,6 @@ export default function FocusTimerPage() {
         osc.stop(start + duration);
       };
 
-      // Calm major chord notes
       playTone(523.25, now, 1.2);        // C5
       playTone(659.25, now + 0.18, 1.2); // E5
       playTone(783.99, now + 0.36, 1.8); // G5
@@ -58,7 +55,6 @@ export default function FocusTimerPage() {
     }
   };
 
-  // Fetch today's stats on mount
   const fetchTodayStats = async () => {
     try {
       const res = await fetch('/api/timer/today', { credentials: 'include' });
@@ -70,9 +66,7 @@ export default function FocusTimerPage() {
         });
       }
     } catch (err) {
-      console.error('Failed to load today timer stats:', err);
-    } finally {
-      setLoadingStats(false);
+      console.error('Failed to load timer stats:', err);
     }
   };
 
@@ -80,374 +74,207 @@ export default function FocusTimerPage() {
     fetchTodayStats();
   }, []);
 
-  // Handle natural completion: Logs session to backend ONLY on natural completion
-  const handleNaturalCompletion = async (durationMins) => {
+  const handleNaturalCompletion = async () => {
     setIsRunning(false);
     setIsCompleted(true);
+    setCompletionMessage(`Mindful focus complete! Logged ${selectedMode.minutes} minutes.`);
     playChime();
-    setCompletionMessage(`Focus session complete! Logged ${durationMins}m to today's progress.`);
 
     try {
       const res = await fetch('/api/timer/session', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({ duration_minutes: durationMins })
+        body: JSON.stringify({ duration_minutes: selectedMode.minutes }),
       });
-
       if (res.ok) {
-        // Refetch updated stats from backend
         fetchTodayStats();
-      } else {
-        console.error('Failed to record session on server');
       }
     } catch (err) {
-      console.error('Network error recording session:', err);
+      console.error('Error logging timer session:', err);
     }
   };
 
-  // Timer Tick Engine using timestamp comparison for accuracy
   useEffect(() => {
     if (isRunning) {
-      if (!endTimeRef.current) {
-        endTimeRef.current = Date.now() + remainingSeconds * 1000;
-      }
-
+      endTimeRef.current = Date.now() + remainingSeconds * 1000;
       timerRef.current = setInterval(() => {
-        const secondsLeft = Math.max(0, Math.ceil((endTimeRef.current - Date.now()) / 1000));
-        setRemainingSeconds(secondsLeft);
-
-        if (secondsLeft <= 0) {
+        const now = Date.now();
+        const diff = Math.round((endTimeRef.current - now) / 1000);
+        if (diff <= 0) {
           clearInterval(timerRef.current);
-          timerRef.current = null;
-          endTimeRef.current = null;
-          handleNaturalCompletion(selectedMode.minutes);
+          setRemainingSeconds(0);
+          handleNaturalCompletion();
+        } else {
+          setRemainingSeconds(diff);
         }
       }, 250);
     } else {
-      if (timerRef.current) {
-        clearInterval(timerRef.current);
-        timerRef.current = null;
-      }
-      endTimeRef.current = null;
+      if (timerRef.current) clearInterval(timerRef.current);
     }
 
     return () => {
-      if (timerRef.current) {
-        clearInterval(timerRef.current);
-      }
+      if (timerRef.current) clearInterval(timerRef.current);
     };
-  }, [isRunning, selectedMode.minutes]);
+  }, [isRunning]);
 
-  // Toggle Start / Pause
-  const toggleTimer = () => {
-    if (isCompleted) {
-      // If completed, start fresh session
-      setIsCompleted(false);
-      setCompletionMessage('');
-      setRemainingSeconds(selectedMode.minutes * 60);
-      endTimeRef.current = Date.now() + selectedMode.minutes * 60 * 1000;
-      setIsRunning(true);
-      return;
-    }
-
-    if (!isRunning) {
-      // Resume / Start
-      endTimeRef.current = Date.now() + remainingSeconds * 1000;
-      setIsRunning(true);
-    } else {
-      // Pause
-      setIsRunning(false);
-      endTimeRef.current = null;
-    }
-  };
-
-  // Manual Reset: Pauses and resets countdown. Does NOT call POST /api/timer/session.
-  const handleReset = () => {
+  const switchMode = (mode) => {
     setIsRunning(false);
-    endTimeRef.current = null;
-    setIsCompleted(false);
-    setCompletionMessage('');
-    const secs = selectedMode.minutes * 60;
-    setTotalSeconds(secs);
-    setRemainingSeconds(secs);
-  };
-
-  // Change Timer Mode (25m / 5m / 15m)
-  const handleModeChange = (mode) => {
-    setIsRunning(false);
-    endTimeRef.current = null;
     setIsCompleted(false);
     setCompletionMessage('');
     setSelectedMode(mode);
-    const secs = mode.minutes * 60;
-    setTotalSeconds(secs);
-    setRemainingSeconds(secs);
+    setTotalSeconds(mode.minutes * 60);
+    setRemainingSeconds(mode.minutes * 60);
   };
 
-  // Calculate SVG circular ring progress
+  const toggleTimer = () => {
+    if (isCompleted) {
+      setRemainingSeconds(totalSeconds);
+      setIsCompleted(false);
+      setCompletionMessage('');
+    }
+    setIsRunning(!isRunning);
+  };
+
+  const resetTimer = () => {
+    setIsRunning(false);
+    setIsCompleted(false);
+    setCompletionMessage('');
+    setRemainingSeconds(totalSeconds);
+  };
+
+  const minutes = Math.floor(remainingSeconds / 60);
+  const seconds = remainingSeconds % 60;
+  const formattedTime = `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+
   const radius = 120;
-  const circumference = 2 * Math.PI * radius; // ~753.98
-  const progressRatio = totalSeconds > 0 ? (totalSeconds - remainingSeconds) / totalSeconds : 0;
+  const circumference = 2 * Math.PI * radius; // 753.98
+  const progressRatio = totalSeconds > 0 ? remainingSeconds / totalSeconds : 0;
   const strokeDashoffset = circumference * (1 - progressRatio);
 
-  const displayMinutes = Math.floor(remainingSeconds / 60);
-  const displaySeconds = remainingSeconds % 60;
-  const formattedTime = `${String(displayMinutes).padStart(2, '0')}:${String(displaySeconds).padStart(2, '0')}`;
-
   return (
-    <div style={{ maxWidth: '480px', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '20px' }}>
-      
-      {/* Zen Ambient Pill */}
-      <div style={{ display: 'flex', justifyContent: 'center' }}>
-        <div style={{
-          display: 'inline-flex',
-          alignItems: 'center',
-          gap: '8px',
-          backgroundColor: 'var(--surface-container-low)',
-          padding: '6px 16px',
-          borderRadius: 'var(--radius-full)',
-          boxShadow: 'var(--shadow-sm)'
-        }}>
-          <span style={{
-            width: '8px',
-            height: '8px',
-            borderRadius: '50%',
-            backgroundColor: isRunning ? 'var(--secondary)' : 'var(--outline)',
-            boxShadow: isRunning ? '0 0 8px var(--secondary)' : 'none',
-            transition: 'all 0.3s ease'
-          }} />
-          <span className="label-sm" style={{ color: 'var(--on-surface-variant)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-            {isRunning ? 'Deep Flow State' : isCompleted ? 'Session Finished' : 'Mindful Focus'}
+    <div className="flex flex-col w-full max-w-[480px] mx-auto px-4 py-4 items-center justify-between min-h-[calc(100vh-10rem)]">
+      {/* Subtle Ambient Zen Pill */}
+      <div className="w-full flex justify-center pt-2">
+        <div className="inline-flex items-center gap-2 bg-surface-container-low px-4 py-1.5 rounded-full shadow-sm">
+          <span className={`w-2 h-2 rounded-full ${isRunning ? 'bg-secondary animate-pulse' : 'bg-outline'}`}></span>
+          <span className="font-label-sm text-xs font-semibold text-on-surface-variant uppercase tracking-wider">
+            {selectedMode.title}
           </span>
         </div>
       </div>
 
-      {/* Main Focus Dial Card */}
-      <div className="card" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '32px 20px', position: 'relative' }}>
-        
-        {/* Soft Circular Glow */}
-        <div style={{
-          position: 'absolute',
-          width: '240px',
-          height: '240px',
-          borderRadius: '50%',
-          backgroundColor: isRunning ? 'rgba(0, 106, 97, 0.08)' : 'rgba(0, 97, 148, 0.04)',
-          filter: 'blur(30px)',
-          pointerEvents: 'none',
-          zIndex: 0
-        }} />
+      {completionMessage && (
+        <div className="mt-3 px-4 py-2 rounded-full bg-secondary-container text-on-secondary-container text-xs font-medium shadow-sm animate-bounce">
+          {completionMessage}
+        </div>
+      )}
 
-        {/* Circular SVG Ring */}
-        <div style={{ position: 'relative', width: '280px', height: '280px', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1 }}>
-          <svg
-            width="280"
-            height="280"
-            viewBox="0 0 280 280"
-            style={{ transform: 'rotate(-90deg)', width: '100%', height: '100%' }}
-          >
+      {/* Central Focus Stage: Dial & Countdown */}
+      <div className="w-full flex flex-col items-center justify-center my-auto py-6">
+        <div className="relative flex items-center justify-center w-72 h-72 sm:w-80 sm:h-80">
+          {/* Gentle ambient backdrop halo */}
+          <div className="absolute inset-4 rounded-full bg-secondary-container/25 blur-2xl pointer-events-none"></div>
+
+          {/* Circular SVG Progress Ring */}
+          <svg className="w-full h-full transform -rotate-90" viewBox="0 0 280 280">
             {/* Background Track */}
             <circle
+              className="text-surface-container"
               cx="140"
               cy="140"
-              r={radius}
               fill="transparent"
-              stroke="var(--surface-container-high)"
+              r={radius}
+              stroke="currentColor"
               strokeWidth="12"
             />
-            {/* Animated Active Arc */}
+            {/* Active Progress Arc */}
             <circle
+              className="text-secondary transition-all duration-300 ease-linear"
               cx="140"
               cy="140"
-              r={radius}
               fill="transparent"
-              stroke="var(--secondary)"
-              strokeWidth="12"
-              strokeLinecap="round"
+              r={radius}
+              stroke="currentColor"
               strokeDasharray={circumference}
               strokeDashoffset={strokeDashoffset}
-              style={{
-                transition: isRunning ? 'stroke-dashoffset 0.3s linear, stroke 0.3s ease' : 'stroke-dashoffset 0.2s ease',
-              }}
+              strokeLinecap="round"
+              strokeWidth="12"
             />
           </svg>
 
-          {/* Center Digital Display */}
-          <div style={{ position: 'absolute', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', userSelect: 'none' }}>
-            <span
-              style={{
-                fontSize: '48px',
-                fontWeight: '700',
-                letterSpacing: '-0.02em',
-                color: 'var(--on-surface)',
-                fontVariantNumeric: 'tabular-nums'
-              }}
-            >
+          {/* Central Countdown Numerals */}
+          <div className="absolute flex flex-col items-center justify-center text-center select-none">
+            <span className="font-headline-lg text-5xl sm:text-6xl text-on-surface tracking-tight font-bold py-1">
               {formattedTime}
             </span>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '6px', color: 'var(--secondary)' }}>
-              <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>
-                {isCompleted ? 'task_alt' : 'self_improvement'}
-              </span>
-              <span className="label-md" style={{ color: 'var(--on-surface-variant)' }}>
-                {selectedMode.title}
+            <div className="flex items-center gap-1.5 mt-3">
+              <span className="material-symbols-outlined text-secondary text-[18px]">self_improvement</span>
+              <span className="font-label-md text-xs font-medium text-on-surface-variant tracking-wide">
+                {isRunning ? 'In Flow' : isCompleted ? 'Session Complete' : 'Ready to Start'}
               </span>
             </div>
           </div>
         </div>
 
-        {/* Mode Switcher Buttons */}
-        <div style={{
-          display: 'flex',
-          gap: '6px',
-          marginTop: '24px',
-          padding: '4px',
-          backgroundColor: 'var(--surface-container-low)',
-          borderRadius: 'var(--radius-full)',
-          zIndex: 1
-        }}>
-          {MODES.map((mode) => {
-            const isSelected = selectedMode.minutes === mode.minutes;
-            return (
-              <button
-                key={mode.minutes}
-                onClick={() => handleModeChange(mode)}
-                disabled={isRunning}
-                style={{
-                  padding: '6px 16px',
-                  borderRadius: 'var(--radius-full)',
-                  border: 'none',
-                  fontSize: '13px',
-                  fontWeight: '600',
-                  cursor: isRunning ? 'not-allowed' : 'pointer',
-                  backgroundColor: isSelected ? 'var(--secondary-container)' : 'transparent',
-                  color: isSelected ? 'var(--on-secondary-container)' : 'var(--on-surface-variant)',
-                  boxShadow: isSelected ? 'var(--shadow-sm)' : 'none',
-                  opacity: isRunning && !isSelected ? 0.6 : 1,
-                  transition: 'all 0.15s ease'
-                }}
-              >
-                {mode.label}
-              </button>
-            );
-          })}
+        {/* Mode Switchers / Subtle Duration Dots */}
+        <div className="flex items-center gap-1 mt-6 p-1 bg-surface-container-lowest rounded-full shadow-sm">
+          {MODES.map((mode) => (
+            <button
+              key={mode.label}
+              onClick={() => switchMode(mode)}
+              className={`px-4 py-1.5 rounded-full font-label-md text-xs font-semibold transition-all ${
+                selectedMode.label === mode.label
+                  ? 'bg-secondary-container text-on-secondary-container shadow-sm'
+                  : 'text-on-surface-variant hover:text-on-surface hover:bg-surface-container-low'
+              }`}
+            >
+              {mode.label}
+            </button>
+          ))}
         </div>
+      </div>
 
-        {/* Completion Celebration Message */}
-        {completionMessage && (
-          <div style={{
-            marginTop: '16px',
-            padding: '10px 18px',
-            backgroundColor: 'var(--secondary-fixed)',
-            color: 'var(--on-secondary-fixed)',
-            borderRadius: 'var(--radius-md)',
-            fontSize: '13px',
-            fontWeight: '600',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-            animation: 'fadeIn 0.3s ease',
-            zIndex: 1
-          }}>
-            <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>celebration</span>
-            <span>{completionMessage}</span>
-          </div>
-        )}
-
-        {/* Primary Action Controls */}
-        <div style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: '12px',
-          marginTop: '24px',
-          width: '100%',
-          maxWidth: '340px',
-          zIndex: 1
-        }}>
-          {/* Manual Reset Button (does NOT log session) */}
+      {/* Bottom Control Deck & Session Stats */}
+      <div className="w-full flex flex-col items-center gap-5 pb-2">
+        {/* Action Pill Button Group */}
+        <div className="w-full flex items-center justify-center gap-3 px-2">
+          {/* Reset Button */}
           <button
-            onClick={handleReset}
-            className="btn-secondary"
-            style={{
-              flex: 1,
-              height: '46px',
-              borderRadius: 'var(--radius-full)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '6px'
-            }}
-            title="Reset timer without logging"
+            aria-label="Reset Timer"
+            onClick={resetTimer}
+            className="flex-1 flex items-center justify-center gap-1.5 h-12 rounded-full bg-surface-container hover:bg-surface-container-high text-on-surface active:scale-95 transition-all font-label-lg text-sm font-semibold shadow-sm"
           >
-            <span className="material-symbols-outlined" style={{ fontSize: '20px' }}>refresh</span>
+            <span className="material-symbols-outlined text-[20px]">refresh</span>
             <span>Reset</span>
           </button>
 
-          {/* Toggle Start / Pause */}
+          {/* Primary Start/Pause Button */}
           <button
+            aria-label="Toggle Timer"
             onClick={toggleTimer}
-            className="btn-primary"
-            style={{
-              flex: 1.5,
-              height: '46px',
-              borderRadius: 'var(--radius-full)',
-              backgroundColor: isRunning ? 'var(--secondary)' : 'var(--primary)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '8px',
-              boxShadow: 'var(--shadow-md)'
-            }}
+            className="flex-[1.4] flex items-center justify-center gap-2 h-12 rounded-full bg-primary-container text-on-primary-container shadow-md hover:opacity-95 active:scale-95 transition-all font-label-lg text-sm font-semibold"
           >
-            <span className="material-symbols-outlined" style={{ fontSize: '22px' }}>
-              {isRunning ? 'pause' : isCompleted ? 'replay' : 'play_arrow'}
+            <span className="material-symbols-outlined text-[22px]">
+              {isRunning ? 'pause' : 'play_arrow'}
             </span>
-            <span>{isRunning ? 'Pause' : isCompleted ? 'New Session' : remainingSeconds < totalSeconds ? 'Resume' : 'Start Focus'}</span>
+            <span>{isRunning ? 'Pause' : 'Start Focus'}</span>
           </button>
         </div>
-      </div>
 
-      {/* Today's Stats Card */}
-      <div className="card" style={{
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        padding: '16px 20px',
-        backgroundColor: 'var(--surface-container-low)'
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <div style={{
-            width: '40px',
-            height: '40px',
-            borderRadius: 'var(--radius-md)',
-            backgroundColor: 'var(--secondary-container)',
-            color: 'var(--on-secondary-container)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center'
-          }}>
-            <span className="material-symbols-outlined" style={{ fontSize: '22px' }}>task_alt</span>
+        {/* Today's Stats Footer */}
+        <div className="flex items-center justify-center gap-6 py-2 px-6 bg-surface-container-low/70 rounded-full text-xs font-medium text-on-surface-variant">
+          <div className="flex items-center gap-1.5">
+            <span className="material-symbols-outlined text-sm text-secondary">check_circle</span>
+            <span><strong>{todayStats.total_sessions}</strong> sessions today</span>
           </div>
-          <div>
-            <div className="label-lg" style={{ color: 'var(--on-surface)' }}>
-              {todayStats.total_sessions} {todayStats.total_sessions === 1 ? 'session' : 'sessions'} completed today
-            </div>
-            <div className="body-sm" style={{ color: 'var(--on-surface-variant)' }}>
-              Deep work logged upon natural countdown completion
-            </div>
-          </div>
-        </div>
-
-        <div style={{ textAlign: 'right' }}>
-          <span className="headline-sm" style={{ color: 'var(--secondary)', fontWeight: '700' }}>
-            {todayStats.total_minutes}m
-          </span>
-          <div className="label-sm" style={{ color: 'var(--on-surface-variant)' }}>
-            focused
+          <span className="text-outline-variant">•</span>
+          <div className="flex items-center gap-1.5">
+            <span className="material-symbols-outlined text-sm text-primary">schedule</span>
+            <span><strong>{todayStats.total_minutes}</strong> mins focused</span>
           </div>
         </div>
       </div>
-
     </div>
   );
 }

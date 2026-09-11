@@ -142,7 +142,6 @@ export default function DashboardPage() {
       );
     } catch (err) {
       console.error(err);
-      // Revert on error
       loadDashboardData();
     } finally {
       setActionLoading(prev => {
@@ -171,7 +170,6 @@ export default function DashboardPage() {
         throw new Error('Failed to update task.');
       }
 
-      // Refresh todos from server for accurate sorting & recurrence status
       const refreshRes = await fetch('/api/todos', { credentials: 'include' });
       if (refreshRes.ok) {
         const refreshJson = await refreshRes.json();
@@ -212,7 +210,6 @@ export default function DashboardPage() {
         throw new Error('Failed to complete leftover task.');
       }
 
-      // Re-fetch todos to clear from leftovers
       const refreshRes = await fetch('/api/todos', { credentials: 'include' });
       if (refreshRes.ok) {
         const refreshJson = await refreshRes.json();
@@ -306,7 +303,7 @@ export default function DashboardPage() {
     }
   }
 
-  // --- Today's Todos Aggregation (combining active/pending with one-time tasks completed today) ---
+  // --- Today's Todos Aggregation ---
   const todayTodoIds = new Set((todosData.today || []).map(t => t.id));
   const completedOneTimeToday = (todosData.completed || []).filter(t => {
     if (t.recurrence !== 'one_time') return false;
@@ -344,56 +341,74 @@ export default function DashboardPage() {
     return 'A calm, intentional day begins with a single check-in.';
   }
 
-  function getPriorityBadge(priority) {
-    switch (priority) {
-      case 'high':
-        return <span className="badge badge-priority-high">High</span>;
-      case 'low':
-        return <span className="badge badge-priority-low">Low</span>;
-      case 'medium':
-      default:
-        return <span className="badge badge-priority-med">Medium</span>;
+  const getPriorityBadge = (priority) => {
+    if (priority === 'high') {
+      return (
+        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-error-container text-on-error-container font-label-sm text-[11px] font-semibold shrink-0">
+          <span className="w-1.5 h-1.5 rounded-full bg-error"></span> High
+        </span>
+      );
     }
-  }
+    if (priority === 'low') {
+      return (
+        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-surface-container text-on-surface-variant font-label-sm text-[11px] font-medium shrink-0">
+          <span className="w-1.5 h-1.5 rounded-full bg-outline"></span> Low
+        </span>
+      );
+    }
+    return (
+      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-800 font-label-sm text-[11px] font-semibold shrink-0">
+        <span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span> Med
+      </span>
+    );
+  };
 
-  function getFrequencyLabel(freq) {
-    switch (freq) {
-      case 'daily':
-        return 'Daily';
-      case '3x_week':
-        return '3x / week';
-      case 'weekly':
-        return 'Weekly';
-      default:
-        return freq;
+  const getMilestoneBadge = (streak) => {
+    if (streak >= 100) {
+      return (
+        <span className="px-2 py-0.5 rounded-full bg-purple-100 text-purple-800 text-[10px] font-bold">
+          💯 100d
+        </span>
+      );
     }
-  }
+    if (streak >= 30) {
+      return (
+        <span className="px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 text-[10px] font-bold">
+          🌟 30d
+        </span>
+      );
+    }
+    if (streak >= 7) {
+      return (
+        <span className="px-2 py-0.5 rounded-full bg-teal-100 text-teal-800 text-[10px] font-bold">
+          ⚡ 7d
+        </span>
+      );
+    }
+    return null;
+  };
 
   if (loading) {
     return (
-      <div className="dashboard-container" style={{ padding: '40px 0', textAlign: 'center' }}>
-        <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', color: 'var(--primary)' }}>
-          <span className="material-symbols-outlined" style={{ animation: 'spin 1s linear infinite' }}>
-            progress_activity
-          </span>
-          <span className="body-md" style={{ fontWeight: '600' }}>Loading today's dashboard...</span>
-        </div>
+      <div className="w-full max-w-[560px] mx-auto py-16 text-center text-xs text-on-surface-variant font-medium">
+        Loading today's dashboard...
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="dashboard-container" style={{ padding: '24px 0' }}>
-        <div className="card" style={{ borderColor: 'var(--error-container)', backgroundColor: 'var(--surface-container-low)', textAlign: 'center' }}>
-          <span className="material-symbols-outlined" style={{ fontSize: '36px', color: 'var(--error)', marginBottom: '8px' }}>
-            error_outline
-          </span>
-          <h2 className="headline-sm" style={{ color: 'var(--error)', marginBottom: '8px' }}>Could not load dashboard</h2>
-          <p className="body-md" style={{ color: 'var(--on-surface-variant)', marginBottom: '16px' }}>{error}</p>
-          <button onClick={loadDashboardData} className="btn-primary">
-            <span className="material-symbols-outlined">refresh</span>
-            Try Again
+      <div className="w-full max-w-[560px] mx-auto py-12 text-center">
+        <div className="bg-surface-container-lowest rounded-2xl p-8 shadow-sm border border-outline-variant/20 flex flex-col items-center gap-3">
+          <span className="material-symbols-outlined text-4xl text-error">error_outline</span>
+          <h2 className="font-headline text-lg font-bold text-on-surface">Could not load dashboard</h2>
+          <p className="font-body text-xs text-on-surface-variant max-w-sm">{error}</p>
+          <button
+            onClick={loadDashboardData}
+            className="mt-2 inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-primary text-on-primary text-xs font-semibold shadow-sm"
+          >
+            <span className="material-symbols-outlined text-[16px]">refresh</span>
+            <span>Try Again</span>
           </button>
         </div>
       </div>
@@ -401,107 +416,88 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="dashboard-container">
-      {/* Top Header & Actions (No weather widget or user avatar photo) */}
-      <div className="dashboard-header">
-        <div className="dashboard-header-left">
-          <div className="dashboard-date-badge">
-            <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>calendar_today</span>
+    <div className="w-full max-w-[560px] mx-auto pb-16 flex flex-col gap-4">
+      {/* Top Header & Actions (No weather widget or user avatar photo per PRD) */}
+      <div className="flex items-start justify-between mt-2 gap-3">
+        <div>
+          <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-surface-container text-on-surface-variant text-[11px] font-semibold">
+            <span className="material-symbols-outlined text-[14px]">calendar_today</span>
             <span>{formatDisplayDate()}</span>
           </div>
-          <h1 className="headline-lg" style={{ color: 'var(--on-surface)', marginTop: '4px' }}>
+          <h1 className="font-headline text-2xl sm:text-3xl font-bold text-on-surface tracking-tight mt-1">
             Daily Dashboard
           </h1>
-          <p className="body-md" style={{ color: 'var(--on-surface-variant)' }}>
+          <p className="font-body text-xs text-on-surface-variant mt-0.5">
             One calm view for today's habits, tasks, and reflections.
           </p>
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+        <div className="flex items-center gap-1.5 shrink-0 pt-1">
           <button
             onClick={() => {
               setModalType('habit');
               setIsModalOpen(true);
             }}
-            className="btn-secondary"
+            className="flex items-center gap-1 bg-primary text-on-primary hover:bg-primary-container px-3.5 py-2 rounded-full shadow-sm active:scale-95 transition-all text-xs font-semibold"
             title="Quick Add Habit or Task"
           >
-            <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>add</span>
-            Quick Add
+            <span className="material-symbols-outlined text-[16px]">add</span>
+            <span>Quick Add</span>
           </button>
-          <Link to="/habits" className="btn-secondary">
-            <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>check_circle</span>
-            Habits
-          </Link>
-          <Link to="/todos" className="btn-secondary">
-            <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>format_list_bulleted</span>
-            Todos
-          </Link>
         </div>
       </div>
 
-      {/* Overall Daily Progress Bar */}
-      <div className="daily-progress-card">
-        <div className="daily-progress-top">
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <div
-              style={{
-                width: '40px',
-                height: '40px',
-                borderRadius: '50%',
-                backgroundColor: 'var(--secondary-container)',
-                color: 'var(--on-secondary-container)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center'
-              }}
-            >
-              <span className="material-symbols-outlined" style={{ fontSize: '22px' }}>spa</span>
+      {/* Mindful Momentum Progress Banner */}
+      <div className="bg-surface-container-lowest rounded-2xl p-5 shadow-sm border border-outline-variant/20 flex flex-col gap-3">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-full bg-secondary-container text-on-secondary-container flex items-center justify-center">
+              <span className="material-symbols-outlined text-[22px]">spa</span>
             </div>
             <div>
-              <span className="label-sm" style={{ color: 'var(--secondary)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+              <span className="text-[10px] font-bold uppercase tracking-wider text-secondary">
                 Mindful Momentum
               </span>
-              <h2 className="headline-sm" style={{ color: 'var(--on-surface)', margin: 0 }}>
+              <h2 className="font-headline text-base font-bold text-on-surface leading-tight">
                 Today's Progress
               </h2>
             </div>
           </div>
-          <div className="daily-progress-stats">
-            <span style={{ fontSize: '24px', fontWeight: '700', color: 'var(--secondary)' }}>
+          <div className="text-right">
+            <span className="text-2xl font-extrabold text-secondary leading-tight">
               {progressPercent}%
             </span>
-            <span className="label-sm" style={{ color: 'var(--on-surface-variant)' }}>
+            <span className="block text-[10px] text-on-surface-variant font-medium">
               ({totalDone}/{totalItems})
             </span>
           </div>
         </div>
 
-        <p className="body-sm" style={{ color: 'var(--on-surface)' }}>
+        <p className="font-body text-xs text-on-surface">
           {getProgressMessage()}
         </p>
 
-        {/* Progress Track & Fill */}
-        <div className="daily-progress-bar-track">
+        {/* Progress Bar Track & Fill */}
+        <div className="w-full bg-surface-container h-2 rounded-full overflow-hidden">
           <div
-            className="daily-progress-bar-fill"
+            className="bg-secondary h-full rounded-full transition-all duration-500 ease-out"
             style={{ width: `${progressPercent}%` }}
           />
         </div>
 
-        <div className="daily-progress-breakdown">
+        <div className="flex items-center gap-3 text-[11px] text-on-surface-variant pt-1 border-t border-outline-variant/10 flex-wrap">
           <span>
-            <strong>Habits:</strong> {habitsDone} of {habitsTotal} checked
+            <strong className="text-on-surface">Habits:</strong> {habitsDone} of {habitsTotal} checked
           </span>
           <span>•</span>
           <span>
-            <strong>Todos:</strong> {todosDone} of {todosTotal} completed
+            <strong className="text-on-surface">Todos:</strong> {todosDone} of {todosTotal} completed
           </span>
           {todosData.leftovers.length > 0 && (
             <>
               <span>•</span>
-              <span style={{ color: '#b45309', fontWeight: '600' }}>
-                {todosData.leftovers.length} leftover {todosData.leftovers.length === 1 ? 'task' : 'tasks'}
+              <span className="text-amber-800 font-semibold">
+                {todosData.leftovers.length} leftover task{todosData.leftovers.length === 1 ? '' : 's'}
               </span>
             </>
           )}
@@ -509,119 +505,102 @@ export default function DashboardPage() {
       </div>
 
       {/* Leftovers Section */}
-      <section className="dashboard-section">
-        <div className="dashboard-section-header">
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <h2 className="headline-sm" style={{ color: 'var(--on-surface)' }}>Leftovers</h2>
-            {todosData.leftovers.length > 0 ? (
-              <span className="badge badge-priority-med">
-                {todosData.leftovers.length} pending
-              </span>
-            ) : (
-              <span className="badge badge-streak" style={{ backgroundColor: '#dcfce7', color: '#166534' }}>
-                All Clear
-              </span>
-            )}
+      {todosData.leftovers.length > 0 ? (
+        <div className="bg-amber-50/90 border border-amber-200/80 rounded-2xl p-4 shadow-sm flex flex-col gap-3">
+          <div className="flex items-start gap-2.5">
+            <span className="material-symbols-outlined text-amber-700 text-[20px] shrink-0 mt-0.5">
+              warning
+            </span>
+            <div>
+              <h3 className="font-headline text-xs font-bold text-amber-900">
+                Missed Recurring Leftovers ({todosData.leftovers.length})
+              </h3>
+              <p className="font-body text-[11px] text-amber-800 mt-0.5">
+                These recurring tasks ended without being checked off. Complete them now to maintain your rhythm.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex flex-col gap-2">
+            {todosData.leftovers.map(item => {
+              const actionKey = `leftover_${item.id}_${item.leftover_period_start}`;
+              const isSubmitting = actionLoading[actionKey];
+
+              return (
+                <div
+                  key={`${item.id}-${item.leftover_period_start}`}
+                  className="bg-white/90 rounded-xl p-3 border border-amber-200/50 flex items-center justify-between gap-3"
+                >
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-headline text-xs font-bold text-on-surface truncate">
+                        {item.title}
+                      </span>
+                      {getPriorityBadge(item.priority)}
+                    </div>
+                    <span className="text-[10px] text-amber-800 font-medium block mt-0.5">
+                      {item.recurrence.toUpperCase()} • Period started {item.leftover_period_start}
+                    </span>
+                  </div>
+
+                  <button
+                    type="button"
+                    disabled={isSubmitting}
+                    onClick={() => handleCompleteLeftover(item)}
+                    className="inline-flex items-center gap-1 px-3 py-1.5 rounded-full bg-amber-700 hover:bg-amber-800 text-white text-xs font-semibold shrink-0 shadow-xs transition-colors"
+                  >
+                    <span className="material-symbols-outlined text-[14px]">check</span>
+                    <span>{isSubmitting ? '...' : 'Complete'}</span>
+                  </button>
+                </div>
+              );
+            })}
           </div>
         </div>
-
-        {todosData.leftovers.length > 0 ? (
-          <div className="leftover-banner">
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#92400e' }}>
-              <span className="material-symbols-outlined" style={{ fontSize: '20px' }}>warning</span>
-              <span className="label-md" style={{ fontWeight: '700' }}>
-                Recurring tasks missed from previous periods
-              </span>
-            </div>
-            <p className="body-sm" style={{ color: '#78350f' }}>
-              These recurring tasks ended without being checked off. Complete them now to keep your records consistent.
-            </p>
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '4px' }}>
-              {todosData.leftovers.map(item => {
-                const actionKey = `leftover_${item.id}_${item.leftover_period_start}`;
-                const isSubmitting = actionLoading[actionKey];
-
-                return (
-                  <div key={`${item.id}-${item.leftover_period_start}`} className="leftover-item">
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        <span className="body-md" style={{ fontWeight: '600', color: 'var(--on-surface)' }}>
-                          {item.title}
-                        </span>
-                        {getPriorityBadge(item.priority)}
-                      </div>
-                      <span className="label-sm" style={{ color: '#b45309' }}>
-                        {item.recurrence.toUpperCase()} • Period started {item.leftover_period_start}
-                      </span>
-                    </div>
-
-                    <button
-                      type="button"
-                      className="btn-complete-leftover"
-                      disabled={isSubmitting}
-                      onClick={() => handleCompleteLeftover(item)}
-                      title="Mark leftover as completed"
-                    >
-                      <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>check</span>
-                      {isSubmitting ? 'Saving...' : 'Complete'}
-                    </button>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        ) : (
-          <div className="leftover-banner-positive">
-            <span
-              className="material-symbols-outlined"
-              style={{ color: 'var(--secondary)', fontSize: '20px' }}
-            >
-              check_circle
-            </span>
-            <span className="body-sm" style={{ color: 'var(--on-surface-variant)' }}>
-              All caught up! No unfinished recurring items from previous periods.
-            </span>
-          </div>
-        )}
-      </section>
+      ) : (
+        <div className="bg-surface-container-lowest rounded-2xl p-3.5 shadow-sm border border-outline-variant/20 flex items-center gap-2 text-xs text-on-surface-variant">
+          <span className="material-symbols-outlined text-secondary text-[18px]">check_circle</span>
+          <span>All caught up! No unfinished recurring items from previous periods.</span>
+        </div>
+      )}
 
       {/* Today's Habits Section */}
-      <section className="dashboard-section">
-        <div className="dashboard-section-header">
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <h2 className="headline-sm" style={{ color: 'var(--on-surface)' }}>Today's Habits</h2>
-            <span className="badge badge-streak">
+      <section className="flex flex-col gap-2.5">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <h2 className="font-headline text-sm font-bold text-on-surface">Today's Habits</h2>
+            <span className="px-2 py-0.5 rounded-full bg-secondary-container text-on-secondary-container text-[10px] font-bold">
               {habitsDone} / {habitsTotal} checked
             </span>
           </div>
-          <Link to="/habits" className="label-sm" style={{ color: 'var(--primary)', fontWeight: '600' }}>
+          <Link
+            to="/habits"
+            className="text-xs font-semibold text-primary hover:text-primary-container transition-colors"
+          >
             Manage Habits →
           </Link>
         </div>
 
         {habits.length === 0 ? (
-          <div className="card" style={{ textAlign: 'center', padding: '32px 16px' }}>
-            <span className="material-symbols-outlined" style={{ fontSize: '40px', color: 'var(--outline)', marginBottom: '8px' }}>
-              self_improvement
-            </span>
-            <h3 className="headline-sm" style={{ marginBottom: '4px' }}>No habits yet</h3>
-            <p className="body-sm" style={{ color: 'var(--on-surface-variant)', marginBottom: '16px' }}>
-              Build consistency by adding your first daily or weekly habit.
+          <div className="bg-surface-container-lowest rounded-2xl p-6 shadow-sm border border-outline-variant/20 text-center flex flex-col items-center gap-2">
+            <span className="material-symbols-outlined text-3xl text-outline-variant">spa</span>
+            <p className="font-headline text-xs font-semibold text-on-surface">No habits yet</p>
+            <p className="font-body text-[11px] text-on-surface-variant max-w-xs">
+              Build consistency by adding your first daily or weekly rhythm.
             </p>
             <button
               onClick={() => {
                 setModalType('habit');
                 setIsModalOpen(true);
               }}
-              className="btn-primary"
+              className="mt-1 inline-flex items-center gap-1 px-3.5 py-1.5 rounded-full bg-primary text-on-primary text-xs font-semibold shadow-sm"
             >
-              <span className="material-symbols-outlined">add</span>
-              Add Your First Habit
+              <span className="material-symbols-outlined text-[14px]">add</span>
+              <span>Add Habit</span>
             </button>
           </div>
         ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+          <div className="flex flex-col gap-2">
             {habits.map(habit => {
               const isChecked = Boolean(habit.is_completed_today);
               const isBusy = actionLoading[`habit_${habit.id}`];
@@ -629,86 +608,57 @@ export default function DashboardPage() {
               return (
                 <div
                   key={habit.id}
-                  className={`dashboard-habit-item ${isChecked ? 'checked' : ''}`}
+                  className={`bg-surface-container-lowest rounded-xl p-3 shadow-sm border border-outline-variant/20 flex items-center justify-between gap-3 hover:shadow-md transition-all ${
+                    isChecked ? 'opacity-90' : ''
+                  }`}
                 >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '14px', minWidth: 0 }}>
-                    {/* One-tap check-in toggle button (min 44x44px circular tap target) */}
+                  <div className="flex items-center gap-3 min-w-0">
                     <button
                       type="button"
                       aria-label={`Check-in ${habit.name}`}
                       disabled={isBusy}
                       onClick={() => handleToggleHabit(habit)}
-                      className={`dashboard-habit-btn ${isChecked ? 'checked' : ''}`}
+                      className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 transition-all ${
+                        isChecked
+                          ? 'bg-primary text-on-primary shadow-xs'
+                          : 'border-2 border-outline-variant hover:border-primary text-transparent'
+                      }`}
                     >
-                      <span
-                        className="material-symbols-outlined"
-                        style={{
-                          fontSize: '22px',
-                          color: isChecked ? '#ffffff' : 'transparent',
-                          fontWeight: '700'
-                        }}
-                      >
-                        check
-                      </span>
+                      <span className="material-symbols-outlined text-[18px]">check</span>
                     </button>
 
-                    <div style={{ minWidth: 0 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
                         <Link
                           to={`/habits/${habit.id}`}
-                          className="body-lg"
-                          style={{
-                            fontWeight: '600',
-                            color: 'var(--on-surface)',
-                            textDecoration: isChecked ? 'none' : 'none'
-                          }}
+                          className={`font-headline text-xs font-bold text-on-surface hover:text-primary transition-colors truncate ${
+                            isChecked ? 'line-through text-on-surface-variant' : ''
+                          }`}
                         >
                           {habit.name}
                         </Link>
-                        <span className="label-sm" style={{ color: 'var(--on-surface-variant)', backgroundColor: 'var(--surface-container)', padding: '2px 8px', borderRadius: 'var(--radius-full)' }}>
-                          {getFrequencyLabel(habit.target_frequency)}
+                        <span className="px-2 py-0.2 rounded-full bg-surface-container text-on-surface-variant text-[9px] font-semibold uppercase">
+                          {habit.target_frequency || 'Daily'}
                         </span>
                       </div>
 
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '4px' }}>
-                        {/* Streak Badge */}
-                        <span className="streak-pill">
-                          <span className="material-symbols-outlined">local_fire_department</span>
-                          {habit.current_streak || 0} day{(habit.current_streak === 1 ? '' : 's')} streak
+                      <div className="flex items-center gap-2 mt-0.5">
+                        <span className="inline-flex items-center gap-0.5 text-[10px] font-bold text-secondary">
+                          <span className="material-symbols-outlined text-[13px]">local_fire_department</span>
+                          <span>{habit.current_streak || 0}d</span>
                         </span>
-                        {(habit.current_streak || 0) >= 100 && (
-                          <span className="badge-milestone badge-milestone-100" title="100-day milestone reached!">
-                            💯 100 Days!
-                          </span>
-                        )}
-                        {(habit.current_streak || 0) >= 30 && (habit.current_streak || 0) < 100 && (
-                          <span className="badge-milestone badge-milestone-30" title="30-day milestone reached!">
-                            🌟 30 Days!
-                          </span>
-                        )}
-                        {(habit.current_streak || 0) >= 7 && (habit.current_streak || 0) < 30 && (
-                          <span className="badge-milestone badge-milestone-7" title="7-day milestone reached!">
-                            ⚡ 7 Days!
-                          </span>
-                        )}
-                        {habit.longest_streak > (habit.current_streak || 0) && (
-                          <span className="label-sm" style={{ color: 'var(--on-surface-variant)' }}>
-                            (best: {habit.longest_streak}d)
-                          </span>
-                        )}
+                        {getMilestoneBadge(habit.current_streak)}
                       </div>
                     </div>
                   </div>
 
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <Link
-                      to={`/habits/${habit.id}`}
-                      className="btn-secondary"
-                      style={{ padding: '6px 12px', fontSize: '12px' }}
-                    >
-                      Details
-                    </Link>
-                  </div>
+                  <Link
+                    to={`/habits/${habit.id}`}
+                    className="p-1 rounded-full text-outline hover:text-primary hover:bg-surface-container transition-colors shrink-0"
+                    title="Habit Details"
+                  >
+                    <span className="material-symbols-outlined text-[18px]">chevron_right</span>
+                  </Link>
                 </div>
               );
             })}
@@ -717,41 +667,42 @@ export default function DashboardPage() {
       </section>
 
       {/* Today's Todos Section */}
-      <section className="dashboard-section">
-        <div className="dashboard-section-header">
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <h2 className="headline-sm" style={{ color: 'var(--on-surface)' }}>Today's Todos</h2>
-            <span className="badge badge-priority-low">
+      <section className="flex flex-col gap-2.5">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <h2 className="font-headline text-sm font-bold text-on-surface">Today's Todos</h2>
+            <span className="px-2 py-0.5 rounded-full bg-surface-container text-on-surface-variant text-[10px] font-medium">
               {todosTotal - todosDone} pending • {todosDone} done
             </span>
           </div>
-          <Link to="/todos" className="label-sm" style={{ color: 'var(--primary)', fontWeight: '600' }}>
+          <Link
+            to="/todos"
+            className="text-xs font-semibold text-primary hover:text-primary-container transition-colors"
+          >
             View All Todos →
           </Link>
         </div>
 
         {dashboardTodos.length === 0 ? (
-          <div className="card" style={{ textAlign: 'center', padding: '32px 16px' }}>
-            <span className="material-symbols-outlined" style={{ fontSize: '40px', color: 'var(--outline)', marginBottom: '8px' }}>
-              task_alt
-            </span>
-            <h3 className="headline-sm" style={{ marginBottom: '4px' }}>No tasks scheduled for today</h3>
-            <p className="body-sm" style={{ color: 'var(--on-surface-variant)', marginBottom: '16px' }}>
-              Enjoy your mindful breathing or add a new action item to focus on.
+          <div className="bg-surface-container-lowest rounded-2xl p-6 shadow-sm border border-outline-variant/20 text-center flex flex-col items-center gap-2">
+            <span className="material-symbols-outlined text-3xl text-outline-variant">task_alt</span>
+            <p className="font-headline text-xs font-semibold text-on-surface">No tasks for today</p>
+            <p className="font-body text-[11px] text-on-surface-variant max-w-xs">
+              Enjoy peaceful mindful breathing or add an action item.
             </p>
             <button
               onClick={() => {
                 setModalType('todo');
                 setIsModalOpen(true);
               }}
-              className="btn-primary"
+              className="mt-1 inline-flex items-center gap-1 px-3.5 py-1.5 rounded-full bg-primary text-on-primary text-xs font-semibold shadow-sm"
             >
-              <span className="material-symbols-outlined">add</span>
-              Add a Task
+              <span className="material-symbols-outlined text-[14px]">add</span>
+              <span>Add Task</span>
             </button>
           </div>
         ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+          <div className="flex flex-col gap-2">
             {dashboardTodos.map(todo => {
               const isChecked = Boolean(todo.is_completed);
               const isBusy = actionLoading[`todo_${todo.id}`];
@@ -759,41 +710,44 @@ export default function DashboardPage() {
               return (
                 <div
                   key={todo.id}
-                  className={`dashboard-todo-item ${isChecked ? 'completed' : ''}`}
+                  className={`bg-surface-container-lowest rounded-xl p-3 shadow-sm border border-outline-variant/20 flex items-center gap-3 hover:shadow-md transition-all ${
+                    isChecked ? 'opacity-70' : ''
+                  }`}
                 >
-                  {/* Circular completion checkbox */}
                   <button
                     type="button"
                     aria-label={`Toggle task completion: ${todo.title}`}
                     disabled={isBusy}
                     onClick={() => handleToggleTodo(todo)}
-                    className={`todo-checkbox ${isChecked ? 'checked' : ''}`}
+                    className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 transition-all ${
+                      isChecked
+                        ? 'bg-primary text-on-primary'
+                        : 'border-2 border-outline-variant hover:border-primary text-transparent'
+                    }`}
                   >
-                    {isChecked && (
-                      <span className="material-symbols-outlined">check</span>
-                    )}
+                    <span className="material-symbols-outlined text-[15px]">check</span>
                   </button>
 
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-                      <span className="dashboard-todo-title body-md" style={{ fontWeight: '600' }}>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span
+                        className={`font-headline text-xs font-bold text-on-surface truncate ${
+                          isChecked ? 'line-through text-on-surface-variant' : ''
+                        }`}
+                      >
                         {todo.title}
                       </span>
                       {getPriorityBadge(todo.priority)}
                     </div>
 
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginTop: '3px' }}>
+                    <div className="flex items-center gap-2 mt-0.5 text-[10px] text-on-surface-variant">
                       {todo.recurrence !== 'one_time' && (
-                        <span className="label-sm" style={{ color: 'var(--primary)', display: 'inline-flex', alignItems: 'center', gap: '2px' }}>
-                          <span className="material-symbols-outlined" style={{ fontSize: '14px' }}>repeat</span>
-                          {todo.recurrence}
+                        <span className="inline-flex items-center gap-0.5 text-primary font-semibold">
+                          <span className="material-symbols-outlined text-[12px]">repeat</span>
+                          <span>{todo.recurrence}</span>
                         </span>
                       )}
-                      {todo.due_date && (
-                        <span className="label-sm" style={{ color: 'var(--on-surface-variant)' }}>
-                          Due: {todo.due_date}
-                        </span>
-                      )}
+                      {todo.due_date && <span>Due: {todo.due_date}</span>}
                     </div>
                   </div>
                 </div>
@@ -803,156 +757,143 @@ export default function DashboardPage() {
         )}
       </section>
 
-      {/* Focus Timer & Journal Quick Cards */}
-      <section style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '16px', marginTop: '8px' }}>
+      {/* Quick Access: Focus Timer & Daily Journal (2-column) */}
+      <section className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-1">
         {/* Focus Timer Card */}
-        <div className="card" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+        <div className="bg-surface-container-lowest rounded-2xl p-4 shadow-sm border border-outline-variant/20 flex flex-col justify-between gap-3">
           <div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <span className="material-symbols-outlined" style={{ color: 'var(--secondary)' }}>timer</span>
-                <h3 className="headline-sm">Focus Timer</h3>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="material-symbols-outlined text-secondary text-[20px]">timer</span>
+                <h3 className="font-headline text-xs font-bold text-on-surface">Focus Timer</h3>
               </div>
-              <span className="badge badge-streak">Deep Flow</span>
+              <span className="px-2 py-0.5 rounded-full bg-secondary-container text-on-secondary-container text-[10px] font-bold">
+                Deep Flow
+              </span>
             </div>
-            <p className="body-sm" style={{ color: 'var(--on-surface-variant)' }}>
-              Completed sessions logged naturally today.
+            <p className="font-body text-[11px] text-on-surface-variant mt-1">
+              Sessions logged upon natural completion.
             </p>
-            <div style={{ marginTop: '16px', display: 'flex', alignItems: 'baseline', gap: '10px' }}>
-              <span style={{ fontSize: '32px', fontWeight: '700', color: 'var(--secondary)' }}>
+            <div className="flex items-baseline gap-2 mt-2">
+              <span className="text-2xl font-extrabold text-secondary leading-tight">
                 {timerStats.total_sessions}
               </span>
-              <span className="label-md" style={{ color: 'var(--on-surface-variant)' }}>
-                {timerStats.total_sessions === 1 ? 'session' : 'sessions'} ({timerStats.total_minutes}m total)
+              <span className="text-xs text-on-surface-variant font-medium">
+                {timerStats.total_sessions === 1 ? 'session' : 'sessions'} ({timerStats.total_minutes}m)
               </span>
             </div>
           </div>
-          <div style={{ marginTop: '16px' }}>
-            <Link to="/timer" className="btn-secondary" style={{ width: '100%' }}>
-              Start Focus Session
-            </Link>
-          </div>
+          <Link
+            to="/timer"
+            className="w-full text-center py-2 rounded-xl bg-surface-container hover:bg-surface-container-high text-on-surface text-xs font-semibold transition-colors"
+          >
+            Start Focus Session
+          </Link>
         </div>
 
         {/* Daily Journal Card */}
-        <div className="card" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+        <div className="bg-surface-container-lowest rounded-2xl p-4 shadow-sm border border-outline-variant/20 flex flex-col justify-between gap-3">
           <div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <span className="material-symbols-outlined" style={{ color: 'var(--primary)' }}>menu_book</span>
-                <h3 className="headline-sm">Daily Journal</h3>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="material-symbols-outlined text-primary text-[20px]">menu_book</span>
+                <h3 className="font-headline text-xs font-bold text-on-surface">Daily Journal</h3>
               </div>
-              <span className="badge badge-priority-low">Reflection</span>
+              <span className="px-2 py-0.5 rounded-full bg-surface-container text-on-surface-variant text-[10px] font-medium">
+                Reflection
+              </span>
             </div>
-            <p className="body-sm" style={{ color: 'var(--on-surface-variant)' }}>
-              Record mindful thoughts, gratitude, and evening notes.
+            <p className="font-body text-[11px] text-on-surface-variant mt-1">
+              Capture gratitude, progress notes, and thoughts.
             </p>
-            <div style={{ marginTop: '16px', color: 'var(--on-surface-variant)', fontSize: '13px' }}>
-              Take a quiet moment to reflect on your daily progress and intentions.
-            </div>
+            <p className="text-xs text-on-surface-variant italic mt-3 truncate">
+              "What went well today?"
+            </p>
           </div>
-          <div style={{ marginTop: '16px' }}>
-            <Link to="/journal" className="btn-primary" style={{ width: '100%' }}>
-              Write Today's Entry
-            </Link>
-          </div>
+          <Link
+            to="/journal"
+            className="w-full text-center py-2 rounded-xl bg-surface-container hover:bg-surface-container-high text-on-surface text-xs font-semibold transition-colors"
+          >
+            Open Journal
+          </Link>
         </div>
       </section>
 
-      {/* Floating Action Button for Quick Add */}
-      <button
-        type="button"
-        className="dashboard-fab"
-        aria-label="Quick Add Habit or Task"
-        title="Quick Add Habit or Task"
-        onClick={() => {
-          setModalType('habit');
-          setIsModalOpen(true);
-        }}
-      >
-        <span className="material-symbols-outlined" style={{ fontSize: '28px' }}>add</span>
-      </button>
-
-      {/* Quick Add Modal Dialog */}
+      {/* Quick Add Modal */}
       {isModalOpen && (
-        <div className="modal-overlay" onClick={() => setIsModalOpen(false)}>
-          <div className="modal-dialog" onClick={e => e.stopPropagation()}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <h2 className="headline-sm" style={{ margin: 0 }}>Quick Add</h2>
+        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-surface-container-lowest rounded-2xl p-6 shadow-xl border border-outline-variant/30 w-full max-w-sm flex flex-col gap-4">
+            <div className="flex items-center justify-between">
+              <h2 className="font-headline text-base font-bold text-on-surface">Quick Add</h2>
               <button
                 type="button"
                 onClick={() => setIsModalOpen(false)}
-                style={{
-                  background: 'transparent',
-                  border: 'none',
-                  cursor: 'pointer',
-                  color: 'var(--on-surface-variant)',
-                  display: 'flex',
-                  alignItems: 'center'
-                }}
+                className="p-1 rounded-full hover:bg-surface-container text-outline hover:text-on-surface transition-colors"
               >
-                <span className="material-symbols-outlined">close</span>
+                <span className="material-symbols-outlined text-[18px]">close</span>
               </button>
             </div>
 
-            {/* Type Switcher Tabs */}
-            <div className="modal-type-tabs">
+            {/* Modal Tabs */}
+            <div className="grid grid-cols-2 p-1 bg-surface-container rounded-full text-xs font-semibold">
               <button
                 type="button"
-                className={`modal-type-tab ${modalType === 'habit' ? 'active' : ''}`}
-                onClick={() => {
-                  setModalType('habit');
-                  setFormError(null);
-                }}
+                onClick={() => setModalType('habit')}
+                className={`py-1.5 rounded-full transition-all ${
+                  modalType === 'habit'
+                    ? 'bg-surface-container-lowest text-primary shadow-xs'
+                    : 'text-on-surface-variant'
+                }`}
               >
-                New Habit
+                Habit
               </button>
               <button
                 type="button"
-                className={`modal-type-tab ${modalType === 'todo' ? 'active' : ''}`}
-                onClick={() => {
-                  setModalType('todo');
-                  setFormError(null);
-                }}
+                onClick={() => setModalType('todo')}
+                className={`py-1.5 rounded-full transition-all ${
+                  modalType === 'todo'
+                    ? 'bg-surface-container-lowest text-primary shadow-xs'
+                    : 'text-on-surface-variant'
+                }`}
               >
-                New Task
+                Task
               </button>
             </div>
 
             {formError && (
-              <div style={{ padding: '10px 14px', borderRadius: 'var(--radius-md)', backgroundColor: 'var(--error-container)', color: 'var(--on-error-container)', fontSize: '13px' }}>
+              <div className="p-2 rounded-lg bg-error-container text-on-error-container text-xs">
                 {formError}
               </div>
             )}
 
-            <form onSubmit={handleQuickAddSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            <form onSubmit={handleQuickAddSubmit} className="flex flex-col gap-3">
               {modalType === 'habit' ? (
                 <>
                   <div>
-                    <label className="label-sm" style={{ display: 'block', marginBottom: '6px', color: 'var(--on-surface-variant)' }}>
-                      Habit Name *
+                    <label className="block text-[11px] font-bold text-on-surface-variant mb-1">
+                      Habit Name
                     </label>
                     <input
                       type="text"
-                      className="form-input"
-                      placeholder="e.g., Morning Meditation, Drink 2L Water"
+                      required
+                      placeholder="e.g. Read 20 pages"
                       value={habitForm.name}
                       onChange={e => setHabitForm({ ...habitForm, name: e.target.value })}
-                      autoFocus
+                      className="w-full px-3.5 py-2 rounded-xl bg-surface-container border border-outline-variant/30 text-on-surface text-xs focus:outline-hidden focus:ring-2 focus:ring-primary"
                     />
                   </div>
 
                   <div>
-                    <label className="label-sm" style={{ display: 'block', marginBottom: '6px', color: 'var(--on-surface-variant)' }}>
-                      Target Frequency
+                    <label className="block text-[11px] font-bold text-on-surface-variant mb-1">
+                      Frequency
                     </label>
                     <select
-                      className="form-select"
                       value={habitForm.target_frequency}
                       onChange={e => setHabitForm({ ...habitForm, target_frequency: e.target.value })}
+                      className="w-full px-3 py-2 rounded-xl bg-surface-container border border-outline-variant/30 text-on-surface text-xs focus:outline-hidden focus:ring-2 focus:ring-primary"
                     >
                       <option value="daily">Daily</option>
-                      <option value="3x_week">3 times / week</option>
+                      <option value="3x_week">3x / week</option>
                       <option value="weekly">Weekly</option>
                     </select>
                   </div>
@@ -960,28 +901,28 @@ export default function DashboardPage() {
               ) : (
                 <>
                   <div>
-                    <label className="label-sm" style={{ display: 'block', marginBottom: '6px', color: 'var(--on-surface-variant)' }}>
-                      Task Title *
+                    <label className="block text-[11px] font-bold text-on-surface-variant mb-1">
+                      Task Title
                     </label>
                     <input
                       type="text"
-                      className="form-input"
-                      placeholder="e.g., Pay electricity bill, Review document"
+                      required
+                      placeholder="e.g. Submit quarterly report"
                       value={todoForm.title}
                       onChange={e => setTodoForm({ ...todoForm, title: e.target.value })}
-                      autoFocus
+                      className="w-full px-3.5 py-2 rounded-xl bg-surface-container border border-outline-variant/30 text-on-surface text-xs focus:outline-hidden focus:ring-2 focus:ring-primary"
                     />
                   </div>
 
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                  <div className="grid grid-cols-2 gap-2">
                     <div>
-                      <label className="label-sm" style={{ display: 'block', marginBottom: '6px', color: 'var(--on-surface-variant)' }}>
+                      <label className="block text-[11px] font-bold text-on-surface-variant mb-1">
                         Priority
                       </label>
                       <select
-                        className="form-select"
                         value={todoForm.priority}
                         onChange={e => setTodoForm({ ...todoForm, priority: e.target.value })}
+                        className="w-full px-2.5 py-2 rounded-xl bg-surface-container border border-outline-variant/30 text-on-surface text-xs focus:outline-hidden focus:ring-2 focus:ring-primary"
                       >
                         <option value="low">Low</option>
                         <option value="medium">Medium</option>
@@ -990,13 +931,13 @@ export default function DashboardPage() {
                     </div>
 
                     <div>
-                      <label className="label-sm" style={{ display: 'block', marginBottom: '6px', color: 'var(--on-surface-variant)' }}>
+                      <label className="block text-[11px] font-bold text-on-surface-variant mb-1">
                         Recurrence
                       </label>
                       <select
-                        className="form-select"
                         value={todoForm.recurrence}
                         onChange={e => setTodoForm({ ...todoForm, recurrence: e.target.value })}
+                        className="w-full px-2.5 py-2 rounded-xl bg-surface-container border border-outline-variant/30 text-on-surface text-xs focus:outline-hidden focus:ring-2 focus:ring-primary"
                       >
                         <option value="one_time">One-time</option>
                         <option value="daily">Daily</option>
@@ -1005,36 +946,23 @@ export default function DashboardPage() {
                       </select>
                     </div>
                   </div>
-
-                  <div>
-                    <label className="label-sm" style={{ display: 'block', marginBottom: '6px', color: 'var(--on-surface-variant)' }}>
-                      Due Date
-                    </label>
-                    <input
-                      type="date"
-                      className="form-input"
-                      value={todoForm.due_date}
-                      onChange={e => setTodoForm({ ...todoForm, due_date: e.target.value })}
-                    />
-                  </div>
                 </>
               )}
 
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '8px' }}>
+              <div className="flex items-center justify-end gap-2 pt-2">
                 <button
                   type="button"
-                  className="btn-secondary"
                   onClick={() => setIsModalOpen(false)}
-                  disabled={formSubmitting}
+                  className="px-3.5 py-2 rounded-full text-xs font-semibold text-on-surface-variant hover:bg-surface-container transition-colors"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="btn-primary"
                   disabled={formSubmitting}
+                  className="px-4 py-2 rounded-full bg-primary text-on-primary text-xs font-semibold shadow-sm active:scale-95 transition-all"
                 >
-                  {formSubmitting ? 'Saving...' : modalType === 'habit' ? 'Create Habit' : 'Create Task'}
+                  {formSubmitting ? 'Saving...' : 'Save'}
                 </button>
               </div>
             </form>
@@ -1044,4 +972,3 @@ export default function DashboardPage() {
     </div>
   );
 }
-

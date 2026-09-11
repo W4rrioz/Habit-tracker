@@ -3,7 +3,28 @@
  * Built strictly according to /docs/stitch/calm_progress/DESIGN.md
  */
 
+body {
+  overscroll-behavior: none;
+}
+.pb-safe {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+.pt-safe {
+  padding-top: env(safe-area-inset-top, 0px);
+}
+::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
 :root {
+
   /* Colors */
   --surface: #f9f9ff;
   --surface-dim: #cfdaf2;

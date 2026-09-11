@@ -1,286 +1,226 @@
-import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+﻿import React, { useState, useEffect } from 'react';
+import { useNavigate, useParams, Link } from 'react-router-dom';
 
 export default function TodoFormPage() {
   const { id } = useParams();
+  const isEdit = Boolean(id);
   const navigate = useNavigate();
-  const isEditing = Boolean(id);
 
   const [title, setTitle] = useState('');
   const [dueDate, setDueDate] = useState('');
   const [priority, setPriority] = useState('medium');
   const [recurrence, setRecurrence] = useState('one_time');
-
-  const [loading, setLoading] = useState(isEditing);
-  const [submitting, setSubmitting] = useState(false);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
   useEffect(() => {
-    if (isEditing) {
+    if (isEdit) {
       fetchTodo();
     }
   }, [id]);
 
   async function fetchTodo() {
     try {
-      setLoading(true);
-      setError(null);
       const res = await fetch(`/api/todos/${id}`, { credentials: 'include' });
-      if (!res.ok) {
-        throw new Error('Could not find requested task');
-      }
+      if (!res.ok) throw new Error('Failed to load task');
       const data = await res.json();
-      if (data.todo) {
-        setTitle(data.todo.title || '');
-        setDueDate(data.todo.due_date || '');
-        setPriority(data.todo.priority || 'medium');
-        setRecurrence(data.todo.recurrence || 'one_time');
-      }
+      setTitle(data.title || '');
+      setDueDate(data.due_date || '');
+      setPriority(data.priority || 'medium');
+      setRecurrence(data.recurrence || 'one_time');
     } catch (err) {
-      console.error(err);
       setError(err.message);
-    } finally {
-      setLoading(false);
     }
   }
 
   async function handleSubmit(e) {
     e.preventDefault();
     if (!title.trim()) {
-      setError('Please enter a task title');
+      setError('Please provide a task title.');
       return;
     }
 
+    setLoading(true);
+    setError(null);
+
     try {
-      setSubmitting(true);
-      setError(null);
-
-      const payload = {
-        title: title.trim(),
-        due_date: dueDate || null,
-        priority,
-        recurrence
-      };
-
-      const url = isEditing ? `/api/todos/${id}` : '/api/todos';
-      const method = isEditing ? 'PUT' : 'POST';
-
+      const url = isEdit ? `/api/todos/${id}` : '/api/todos';
+      const method = isEdit ? 'PUT' : 'POST';
       const res = await fetch(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify(payload)
+        body: JSON.stringify({
+          title: title.trim(),
+          due_date: dueDate || null,
+          priority,
+          recurrence
+        })
       });
 
-      const data = await res.json();
       if (!res.ok) {
-        throw new Error(data.error || 'Failed to save task');
+        const errJson = await res.json().catch(() => ({}));
+        throw new Error(errJson.error || 'Failed to save task');
       }
 
       navigate('/todos');
     } catch (err) {
-      console.error(err);
       setError(err.message);
     } finally {
-      setSubmitting(false);
+      setLoading(false);
     }
   }
 
-  const priorityOptions = [
-    { value: 'low', label: 'Low', bg: 'var(--priority-low-bg)', text: 'var(--priority-low-text)', border: '#93ccff' },
-    { value: 'medium', label: 'Medium', bg: 'var(--priority-med-bg)', text: 'var(--priority-med-text)', border: '#fde68a' },
-    { value: 'high', label: 'High', bg: 'var(--priority-high-bg)', text: 'var(--priority-high-text)', border: '#ffdad6' }
-  ];
-
-  const recurrenceOptions = [
-    { value: 'one_time', label: 'One-time', desc: 'Single task with optional due date' },
-    { value: 'daily', label: 'Daily', desc: 'Resets daily; missed tasks become leftovers next day' },
-    { value: 'weekly', label: 'Weekly', desc: 'Resets every Monday; missed tasks become leftovers' },
-    { value: 'monthly', label: 'Monthly', desc: 'Resets 1st of each month; tracks monthly leftover' }
-  ];
-
   return (
-    <div style={{ maxWidth: '580px', margin: '0 auto', padding: '12px 0 32px' }}>
-      <div className="card">
-        {/* Header */}
-        <div style={{ marginBottom: '24px' }}>
-          <h1 className="headline-lg" style={{ marginBottom: '6px' }}>
-            {isEditing ? 'Edit Task' : 'Create New Task'}
-          </h1>
-          <p className="body-md" style={{ color: 'var(--on-surface-variant)' }}>
-            {isEditing
-              ? 'Update details, priority, or recurrence rules.'
-              : 'Add a new task to your calm progress system.'}
-          </p>
+    <div className="flex flex-col w-full max-w-[480px] mx-auto pb-12">
+      {/* Top Action Sub-bar */}
+      <div className="flex items-center justify-between py-2 mb-2">
+        <button
+          onClick={() => navigate(-1)}
+          aria-label="Go back"
+          className="w-10 h-10 -ml-2 rounded-full flex items-center justify-center text-on-surface hover:bg-surface-container transition-colors"
+          type="button"
+        >
+          <span className="material-symbols-outlined text-[24px]">arrow_back</span>
+        </button>
+        <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-secondary-container text-on-secondary-container text-xs font-semibold">
+          <span className="material-symbols-outlined text-[16px]">task_alt</span>
+          <span>{isEdit ? 'Edit Task' : 'New Task'}</span>
+        </div>
+        <div className="w-10"></div>
+      </div>
+
+      {/* Inspirational Micro-card */}
+      <div className="relative overflow-hidden rounded-lg bg-surface-container-low p-4 mb-5 shadow-sm">
+        <div className="flex items-center gap-3 relative z-10">
+          <div className="w-10 h-10 rounded-full bg-surface-container-lowest flex items-center justify-center text-secondary shadow-sm shrink-0">
+            <span className="material-symbols-outlined text-[22px]">checklist</span>
+          </div>
+          <div className="min-w-0">
+            <p className="font-label-md text-xs font-bold text-secondary">Intentional Action</p>
+            <p className="font-body-md text-xs text-on-surface-variant truncate">
+              Clear goals set a calm, productive rhythm for your day.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {error && (
+        <div className="p-3 bg-error-container text-on-error-container rounded-2xl text-xs font-medium mb-4 flex items-center gap-2">
+          <span className="material-symbols-outlined text-base text-error">error</span>
+          <span>{error}</span>
+        </div>
+      )}
+
+      {/* Form Surface */}
+      <form onSubmit={handleSubmit} className="flex flex-col gap-5">
+        {/* Task Title Input */}
+        <div className="flex flex-col gap-1.5">
+          <label className="font-label-lg text-xs font-bold text-on-surface px-1 flex items-center justify-between">
+            <span>Task Title</span>
+            <span className="text-[11px] text-tertiary font-normal">Required</span>
+          </label>
+          <div className="relative flex items-center">
+            <span className="material-symbols-outlined absolute left-4 text-outline text-[20px] pointer-events-none">
+              edit
+            </span>
+            <input
+              type="text"
+              className="w-full bg-surface-container-lowest text-on-surface font-body-md text-sm placeholder:text-outline-variant rounded-full pl-12 pr-5 py-3 shadow-sm outline-none focus:bg-surface-container-low transition-all"
+              placeholder="e.g. Call accountant, Review PRD"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              required
+            />
+          </div>
         </div>
 
-        {error && (
-          <div
-            style={{
-              padding: '12px 16px',
-              borderRadius: 'var(--radius-md)',
-              backgroundColor: 'var(--error-container)',
-              color: 'var(--on-error-container)',
-              marginBottom: '20px',
-              fontSize: '14px'
-            }}
-          >
-            {error}
-          </div>
-        )}
-
-        {loading ? (
-          <p className="body-md" style={{ color: 'var(--on-surface-variant)', textAlign: 'center', padding: '24px' }}>
-            Loading task details...
-          </p>
-        ) : (
-          <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-            {/* Title */}
-            <div>
-              <label className="label-md" style={{ display: 'block', marginBottom: '8px', color: 'var(--on-surface)' }}>
-                Task Title *
-              </label>
-              <input
-                type="text"
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                placeholder="e.g. Weekly grocery planning"
-                className="form-input"
-                required
-                autoFocus
-              />
-            </div>
-
-            {/* Priority Selector */}
-            <div>
-              <label className="label-md" style={{ display: 'block', marginBottom: '8px', color: 'var(--on-surface)' }}>
-                Priority Level
-              </label>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px' }}>
-                {priorityOptions.map((opt) => {
-                  const isSelected = priority === opt.value;
-                  return (
-                    <button
-                      key={opt.value}
-                      type="button"
-                      onClick={() => setPriority(opt.value)}
-                      style={{
-                        padding: '10px',
-                        borderRadius: 'var(--radius-md)',
-                        border: `2px solid ${isSelected ? 'var(--primary)' : 'var(--surface-container-high)'}`,
-                        backgroundColor: isSelected ? opt.bg : 'var(--surface-container-lowest)',
-                        color: isSelected ? opt.text : 'var(--on-surface-variant)',
-                        fontWeight: isSelected ? 700 : 500,
-                        fontSize: '13px',
-                        cursor: 'pointer',
-                        transition: 'all 0.15s ease',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        gap: '6px'
-                      }}
-                    >
-                      <span
-                        style={{
-                          width: '8px',
-                          height: '8px',
-                          borderRadius: '50%',
-                          backgroundColor: opt.border
-                        }}
-                      />
-                      {opt.label}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* Recurrence Selector */}
-            <div>
-              <label className="label-md" style={{ display: 'block', marginBottom: '8px', color: 'var(--on-surface)' }}>
-                Recurrence & Leftover Tracking
-              </label>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '8px' }}>
-                {recurrenceOptions.map((opt) => {
-                  const isSelected = recurrence === opt.value;
-                  return (
-                    <div
-                      key={opt.value}
-                      onClick={() => setRecurrence(opt.value)}
-                      style={{
-                        padding: '12px 14px',
-                        borderRadius: 'var(--radius-md)',
-                        border: `1.5px solid ${isSelected ? 'var(--primary)' : 'var(--surface-container-high)'}`,
-                        backgroundColor: isSelected ? 'var(--surface-container-low)' : 'var(--surface-container-lowest)',
-                        cursor: 'pointer',
-                        display: 'flex',
-                        alignItems: 'flex-start',
-                        gap: '12px',
-                        transition: 'all 0.15s ease'
-                      }}
-                    >
-                      <input
-                        type="radio"
-                        name="recurrence"
-                        value={opt.value}
-                        checked={isSelected}
-                        onChange={() => setRecurrence(opt.value)}
-                        style={{ marginTop: '3px', accentColor: 'var(--primary)' }}
-                      />
-                      <div style={{ flex: 1 }}>
-                        <p className="label-md" style={{ color: isSelected ? 'var(--primary)' : 'var(--on-surface)', marginBottom: '2px' }}>
-                          {opt.label}
-                        </p>
-                        <p className="body-sm" style={{ color: 'var(--on-surface-variant)', margin: 0 }}>
-                          {opt.desc}
-                        </p>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* Due Date */}
-            <div>
-              <label className="label-md" style={{ display: 'block', marginBottom: '8px', color: 'var(--on-surface)' }}>
-                Due Date {recurrence !== 'one_time' ? '(Optional Reference)' : '(Optional)'}
-              </label>
-              <input
-                type="date"
-                value={dueDate}
-                onChange={(e) => setDueDate(e.target.value)}
-                className="form-input"
-              />
-              <p className="body-sm" style={{ color: 'var(--on-surface-variant)', marginTop: '4px' }}>
-                {recurrence === 'one_time'
-                  ? 'Tasks with future due dates will appear in the "Upcoming" tab.'
-                  : 'Recurring tasks cycle automatically based on the selected frequency.'}
-              </p>
-            </div>
-
-            {/* Form Actions */}
-            <div style={{ display: 'flex', gap: '12px', marginTop: '12px' }}>
+        {/* Priority Selector */}
+        <div className="flex flex-col gap-1.5">
+          <label className="font-label-lg text-xs font-bold text-on-surface px-1">Priority Level</label>
+          <div className="p-1 rounded-full bg-surface-container-low flex items-center justify-between gap-1 shadow-inner">
+            {[
+              { val: 'low', label: 'Low', color: 'bg-primary text-on-primary' },
+              { val: 'medium', label: 'Medium', color: 'bg-secondary text-on-secondary' },
+              { val: 'high', label: 'High', color: 'bg-error text-on-error' },
+            ].map((item) => (
               <button
-                type="submit"
-                className="btn-primary"
-                disabled={submitting}
-                style={{ flex: 1 }}
-              >
-                {submitting ? 'Saving...' : isEditing ? 'Save Changes' : 'Create Task'}
-              </button>
-              <button
+                key={item.val}
                 type="button"
-                onClick={() => navigate(-1)}
-                className="btn-secondary"
-                disabled={submitting}
+                onClick={() => setPriority(item.val)}
+                className={`flex-1 py-2 rounded-full font-label-md text-xs font-semibold text-center transition-all ${
+                  priority === item.val
+                    ? `${item.color} shadow-sm`
+                    : 'text-on-surface-variant hover:text-on-surface'
+                }`}
               >
-                Cancel
+                {item.label}
               </button>
-            </div>
-          </form>
-        )}
-      </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Recurrence Selector */}
+        <div className="flex flex-col gap-1.5">
+          <label className="font-label-lg text-xs font-bold text-on-surface px-1">Recurrence Schedule</label>
+          <div className="grid grid-cols-4 gap-1.5 p-1 rounded-full bg-surface-container-low text-center shadow-inner">
+            {[
+              { val: 'one_time', label: 'Once' },
+              { val: 'daily', label: 'Daily' },
+              { val: 'weekly', label: 'Weekly' },
+              { val: 'monthly', label: 'Monthly' },
+            ].map((item) => (
+              <button
+                key={item.val}
+                type="button"
+                onClick={() => setRecurrence(item.val)}
+                className={`py-2 rounded-full font-label-md text-xs font-semibold transition-all ${
+                  recurrence === item.val
+                    ? 'bg-surface-container-lowest text-primary shadow-sm'
+                    : 'text-on-surface-variant hover:text-on-surface'
+                }`}
+              >
+                {item.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Due Date */}
+        <div className="flex flex-col gap-1.5">
+          <label className="font-label-lg text-xs font-bold text-on-surface px-1">Due Date (Optional)</label>
+          <div className="relative flex items-center">
+            <span className="material-symbols-outlined absolute left-4 text-outline text-[20px] pointer-events-none">
+              calendar_today
+            </span>
+            <input
+              type="date"
+              className="w-full bg-surface-container-lowest text-on-surface font-body-md text-sm rounded-full pl-12 pr-5 py-3 shadow-sm outline-none focus:bg-surface-container-low transition-all"
+              value={dueDate}
+              onChange={(e) => setDueDate(e.target.value)}
+            />
+          </div>
+        </div>
+
+        {/* Submit Actions */}
+        <div className="flex items-center gap-3 pt-3">
+          <button
+            type="button"
+            onClick={() => navigate(-1)}
+            className="flex-1 py-3 rounded-full bg-surface-container text-on-surface font-label-lg text-sm font-semibold hover:bg-surface-container-high transition-all"
+          >
+            Cancel
+          </button>
+          <button
+            type="submit"
+            disabled={loading}
+            className="flex-[1.5] py-3 rounded-full bg-primary text-on-primary font-label-lg text-sm font-semibold shadow-md hover:bg-primary-container transition-all flex items-center justify-center gap-1.5 disabled:opacity-50"
+          >
+            <span>{loading ? 'Saving...' : isEdit ? 'Update Task' : 'Create Task'}</span>
+            <span className="material-symbols-outlined text-[18px]">check</span>
+          </button>
+        </div>
+      </form>
     </div>
   );
 }

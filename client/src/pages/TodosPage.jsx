@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+﻿import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 
 export default function TodosPage() {
@@ -17,9 +17,7 @@ export default function TodosPage() {
       setLoading(true);
       setError(null);
       const res = await fetch('/api/todos', { credentials: 'include' });
-      if (!res.ok) {
-        throw new Error('Failed to load tasks');
-      }
+      if (!res.ok) throw new Error('Failed to load tasks');
       const json = await res.json();
       setData({
         today: json.today || [],
@@ -52,368 +50,256 @@ export default function TodosPage() {
         body: JSON.stringify(payload)
       });
 
-      if (!res.ok) {
-        throw new Error('Failed to update task');
-      }
-
+      if (!res.ok) throw new Error('Failed to update task');
       await fetchTodos();
     } catch (err) {
-      console.error(err);
       alert(err.message);
     } finally {
       setActionLoading(prev => ({ ...prev, [key]: false }));
     }
   }
 
-  async function handleDelete(todo) {
-    if (!window.confirm(`Delete "${todo.title}"?`)) return;
-
+  async function handleDelete(id) {
+    if (!window.confirm('Delete this task?')) return;
     try {
-      const res = await fetch(`/api/todos/${todo.id}`, {
+      const res = await fetch(`/api/todos/${id}`, {
         method: 'DELETE',
         credentials: 'include'
       });
-
-      if (!res.ok) {
-        throw new Error('Failed to delete task');
-      }
-
+      if (!res.ok) throw new Error('Failed to delete task');
       await fetchTodos();
     } catch (err) {
-      console.error(err);
       alert(err.message);
     }
   }
 
-  function getPriorityBadge(priority) {
-    switch (priority) {
-      case 'high':
-        return <span className="badge badge-priority-high">High</span>;
-      case 'low':
-        return <span className="badge badge-priority-low">Low</span>;
-      case 'medium':
-      default:
-        return <span className="badge badge-priority-med">Medium</span>;
+  const priorityBadge = (priority) => {
+    if (priority === 'high') {
+      return (
+        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-error-container text-on-error-container font-label-sm text-[11px] font-semibold shrink-0">
+          <span className="w-1.5 h-1.5 rounded-full bg-error"></span> High
+        </span>
+      );
     }
-  }
-
-  function getRecurrenceLabel(rec) {
-    switch (rec) {
-      case 'daily':
-        return 'Daily';
-      case 'weekly':
-        return 'Weekly (Mon-Sun)';
-      case 'monthly':
-        return 'Monthly';
-      default:
-        return null;
+    if (priority === 'medium') {
+      return (
+        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-secondary-container text-on-secondary-container font-label-sm text-[11px] font-semibold shrink-0">
+          <span className="w-1.5 h-1.5 rounded-full bg-secondary"></span> Medium
+        </span>
+      );
     }
-  }
+    return (
+      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-primary-fixed text-on-primary-fixed font-label-sm text-[11px] font-semibold shrink-0">
+        <span className="w-1.5 h-1.5 rounded-full bg-primary"></span> Low
+      </span>
+    );
+  };
 
-  function getLeftoverPeriodLabel(rec, periodStart) {
-    switch (rec) {
-      case 'daily':
-        return `Yesterday (${periodStart})`;
-      case 'weekly':
-        return `Last week (started ${periodStart})`;
-      case 'monthly':
-        return `Last month (${periodStart})`;
-      default:
-        return periodStart;
-    }
-  }
+  const totalTodayTasks = data.today.length + (data.completed.filter(t => t.completed_today || t.is_completed).length);
+  const completedTodayCount = data.completed.length;
+  const progressPercent = totalTodayTasks > 0
+    ? Math.round((completedTodayCount / (data.today.length + completedTodayCount)) * 100)
+    : 0;
 
-  const currentList = data[tab] || [];
+  const currentList = tab === 'today' ? data.today : tab === 'upcoming' ? data.upcoming : data.completed;
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '24px', maxWidth: '800px', margin: '0 auto' }}>
-      {/* Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
+    <div className="flex flex-col w-full max-w-[560px] mx-auto pb-12">
+      {/* Top Action & Title Bar */}
+      <div className="flex items-center justify-between mt-2 mb-4">
         <div>
-          <h1 className="headline-lg">Todo List</h1>
-          <p className="body-md" style={{ color: 'var(--on-surface-variant)' }}>
-            Organize one-time tasks, recurring habits, and resolve leftovers calmly.
+          <h1 className="font-headline-lg text-2xl sm:text-3xl font-bold text-on-surface tracking-tight">Todos</h1>
+          <p className="font-body-sm text-xs text-on-surface-variant flex items-center gap-1.5 mt-0.5">
+            <span className="inline-block w-2 h-2 rounded-full bg-secondary"></span>
+            <span>{data.today.length} pending • {completedTodayCount} completed today</span>
           </p>
         </div>
-        <Link to="/todos/new" className="btn-primary">
-          <span className="material-symbols-outlined" style={{ fontSize: '20px' }}>add</span>
-          Add Todo
+        <Link
+          to="/todos/new"
+          className="flex items-center gap-1.5 bg-primary text-on-primary hover:bg-primary-container px-4 py-2.5 rounded-full shadow-sm active:scale-95 transition-all duration-200 font-label-md text-xs font-semibold"
+        >
+          <span className="material-symbols-outlined text-[18px]">add</span>
+          <span>Add Task</span>
         </Link>
       </div>
 
-      {/* Leftover Section/Banner */}
-      {data.leftovers.length > 0 ? (
-        <div className="leftover-banner">
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <span className="material-symbols-outlined" style={{ color: '#b45309', fontSize: '22px' }}>
-                pending_actions
-              </span>
-              <span className="label-lg" style={{ color: '#78350f' }}>
-                Leftover Tasks ({data.leftovers.length})
-              </span>
-            </div>
-            <span className="body-sm" style={{ color: '#92400e' }}>
-              From ended periods
+      {/* Micro Focus Banner (Calm Progress Moment) */}
+      <div className="relative overflow-hidden rounded-lg bg-surface-container-low p-4 mb-4 flex items-center gap-3.5 shadow-sm">
+        <div className="w-10 h-10 rounded-full bg-secondary-container text-on-secondary-container flex items-center justify-center shrink-0 shadow-sm">
+          <span className="material-symbols-outlined text-[20px]">spa</span>
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center justify-between gap-2">
+            <span className="font-label-sm text-[11px] font-bold text-secondary uppercase tracking-wider">
+              Mindful Momentum
+            </span>
+            <span className="font-label-sm text-xs font-semibold text-on-surface-variant">
+              {progressPercent}% done
             </span>
           </div>
-          <p className="body-sm" style={{ color: '#78350f', margin: 0 }}>
-            These recurring tasks were not completed in their previous period. You can check them off now to catch up.
+          <p className="font-body-sm text-xs text-on-surface truncate mt-0.5">
+            {progressPercent === 100
+              ? 'All daily tasks complete! Take a deep breath and rest.'
+              : 'One mindful step at a time. Keep going.'}
           </p>
-
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '4px' }}>
-            {data.leftovers.map((todo) => {
-              const loadingKey = `${todo.id}_leftover`;
-              return (
-                <div
-                  key={`leftover_${todo.id}`}
-                  className="todo-card"
-                  style={{
-                    backgroundColor: '#ffffff',
-                    borderColor: '#fde68a',
-                    padding: '12px 16px'
-                  }}
-                >
-                  <button
-                    type="button"
-                    onClick={() => handleToggle(todo, true)}
-                    className="todo-checkbox"
-                    disabled={actionLoading[loadingKey]}
-                    aria-label={`Mark ${todo.title} completed for leftover period`}
-                    title="Mark completed for leftover period"
-                  >
-                    {actionLoading[loadingKey] && (
-                      <span className="material-symbols-outlined" style={{ fontSize: '16px', color: 'var(--primary)' }}>
-                        sync
-                      </span>
-                    )}
-                  </button>
-
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-                      <span className="body-md" style={{ fontWeight: 600, color: 'var(--on-surface)' }}>
-                        {todo.title}
-                      </span>
-                      {getPriorityBadge(todo.priority)}
-                      <span
-                        className="badge"
-                        style={{
-                          backgroundColor: '#fef3c7',
-                          color: '#92400e',
-                          fontSize: '11px'
-                        }}
-                      >
-                        {getLeftoverPeriodLabel(todo.recurrence, todo.leftover_period_start)}
-                      </span>
-                    </div>
-                  </div>
-
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                    <Link
-                      to={`/todos/${todo.id}/edit`}
-                      className="btn-secondary"
-                      style={{ padding: '6px 10px', fontSize: '12px' }}
-                      title="Edit Todo"
-                    >
-                      <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>edit</span>
-                    </Link>
-                  </div>
-                </div>
-              );
-            })}
+          <div className="w-full h-1.5 bg-surface-container-highest rounded-full mt-2 overflow-hidden">
+            <div
+              className="h-full bg-secondary rounded-full transition-all duration-500"
+              style={{ width: `${progressPercent}%` }}
+            ></div>
           </div>
         </div>
-      ) : (
-        tab === 'today' && !loading && (
-          <div className="leftover-banner-positive">
-            <span className="material-symbols-outlined" style={{ color: 'var(--secondary)', fontSize: '20px' }}>
-              check_circle
-            </span>
-            <span className="body-sm" style={{ color: 'var(--on-surface-variant)' }}>
-              All caught up! No leftover tasks from previous periods.
-            </span>
-          </div>
-        )
-      )}
-
-      {/* Tabs */}
-      <div style={{ display: 'flex', gap: '8px', borderBottom: '1px solid var(--surface-container-high)', paddingBottom: '12px' }}>
-        {[
-          { id: 'today', label: 'Today', count: data.today.length },
-          { id: 'upcoming', label: 'Upcoming', count: data.upcoming.length },
-          { id: 'completed', label: 'Completed', count: data.completed.length }
-        ].map(({ id, label, count }) => {
-          const isActive = tab === id;
-          return (
-            <button
-              key={id}
-              onClick={() => setTab(id)}
-              className="btn-secondary"
-              style={{
-                padding: '8px 18px',
-                borderRadius: 'var(--radius-full)',
-                backgroundColor: isActive ? 'var(--primary-fixed)' : 'transparent',
-                color: isActive ? 'var(--on-primary-fixed)' : 'var(--on-surface-variant)',
-                borderColor: isActive ? 'var(--primary)' : 'transparent',
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '8px',
-                fontWeight: isActive ? 600 : 500
-              }}
-            >
-              <span>{label}</span>
-              <span
-                style={{
-                  fontSize: '11px',
-                  padding: '2px 7px',
-                  borderRadius: 'var(--radius-full)',
-                  backgroundColor: isActive ? 'var(--primary)' : 'var(--surface-container)',
-                  color: isActive ? '#ffffff' : 'var(--on-surface-variant)'
-                }}
-              >
-                {count}
-              </span>
-            </button>
-          );
-        })}
       </div>
 
-      {/* Loading & Error States */}
-      {loading && (
-        <div className="card" style={{ textAlign: 'center', padding: '36px' }}>
-          <p className="body-md" style={{ color: 'var(--on-surface-variant)' }}>Loading your tasks...</p>
+      {/* Leftover Tasks Banner */}
+      {data.leftovers.length > 0 && tab === 'today' && (
+        <div className="mb-4 p-4 rounded-lg bg-error-container/40 border border-error-container text-on-error-container shadow-sm">
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center gap-1.5 font-label-md text-xs font-bold text-error">
+              <span className="material-symbols-outlined text-[16px]">warning</span>
+              <span>Leftover Tasks From Previous Periods</span>
+            </div>
+            <span className="text-[11px] px-2 py-0.5 rounded-full bg-error-container font-semibold">
+              {data.leftovers.length} overdue
+            </span>
+          </div>
+          <div className="flex flex-col gap-2">
+            {data.leftovers.map((item) => (
+              <div
+                key={`leftover_${item.id}`}
+                className="flex items-center justify-between gap-2 bg-surface-container-lowest p-2.5 rounded-md shadow-sm"
+              >
+                <div className="min-w-0 flex-1">
+                  <p className="font-body-md text-xs font-semibold text-on-surface truncate">{item.title}</p>
+                  <p className="font-body-sm text-[10px] text-error font-medium">
+                    Unfinished from {item.leftover_period_name || 'yesterday'}
+                  </p>
+                </div>
+                <button
+                  onClick={() => handleToggle(item, true)}
+                  disabled={actionLoading[`${item.id}_leftover`]}
+                  className="px-3 py-1 rounded-full bg-secondary text-on-secondary text-xs font-semibold hover:opacity-90 active:scale-95 transition-all shrink-0"
+                >
+                  Mark Done
+                </button>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 
-      {error && (
-        <div className="card" style={{ borderColor: 'var(--error)', backgroundColor: 'var(--error-container)', padding: '16px' }}>
-          <p className="body-md" style={{ color: 'var(--on-error-container)' }}>{error}</p>
-        </div>
-      )}
-
-      {/* Todo List Content */}
-      {!loading && !error && currentList.length === 0 && (
-        <div className="card" style={{ textAlign: 'center', padding: '48px 24px' }}>
-          <span className="material-symbols-outlined" style={{ fontSize: '40px', color: 'var(--outline)', marginBottom: '8px' }}>
-            {tab === 'completed' ? 'task_alt' : 'assignment'}
+      {/* Soft Rounded Tab Switcher */}
+      <div className="flex items-center bg-surface-container-low p-1 rounded-full mb-4 shadow-sm">
+        <button
+          onClick={() => setTab('today')}
+          className={`tab-pill flex-1 py-2 px-2 rounded-full font-label-md text-xs font-semibold text-center transition-all duration-200 ${
+            tab === 'today'
+              ? 'bg-surface-container-lowest text-primary shadow-sm'
+              : 'text-on-surface-variant hover:text-on-surface'
+          }`}
+        >
+          Today
+          <span className="inline-flex items-center justify-center ml-1.5 w-4 h-4 rounded-full bg-primary-fixed text-on-primary-fixed text-[10px] font-bold">
+            {data.today.length}
           </span>
-          <p className="headline-sm" style={{ color: 'var(--on-surface)', marginBottom: '4px' }}>
-            {tab === 'today' && 'No tasks for today'}
-            {tab === 'upcoming' && 'No upcoming tasks scheduled'}
-            {tab === 'completed' && 'No completed tasks yet'}
-          </p>
-          <p className="body-md" style={{ color: 'var(--on-surface-variant)', marginBottom: '16px' }}>
-            {tab === 'today' && 'You are completely clear for today. Add a new task to stay organized.'}
-            {tab === 'upcoming' && 'Future tasks with due dates will appear here.'}
-            {tab === 'completed' && 'Completed tasks and recurring checkoffs will be recorded here.'}
-          </p>
-          {tab !== 'completed' && (
-            <Link to="/todos/new" className="btn-primary" style={{ display: 'inline-flex' }}>
-              + Add Todo
-            </Link>
-          )}
+        </button>
+        <button
+          onClick={() => setTab('upcoming')}
+          className={`tab-pill flex-1 py-2 px-2 rounded-full font-label-md text-xs font-semibold text-center transition-all duration-200 ${
+            tab === 'upcoming'
+              ? 'bg-surface-container-lowest text-primary shadow-sm'
+              : 'text-on-surface-variant hover:text-on-surface'
+          }`}
+        >
+          Upcoming
+          <span className="inline-flex items-center justify-center ml-1.5 w-4 h-4 rounded-full bg-surface-container-highest text-on-surface-variant text-[10px] font-bold">
+            {data.upcoming.length}
+          </span>
+        </button>
+        <button
+          onClick={() => setTab('completed')}
+          className={`tab-pill flex-1 py-2 px-2 rounded-full font-label-md text-xs font-semibold text-center transition-all duration-200 ${
+            tab === 'completed'
+              ? 'bg-surface-container-lowest text-primary shadow-sm'
+              : 'text-on-surface-variant hover:text-on-surface'
+          }`}
+        >
+          Completed
+          <span className="inline-flex items-center justify-center ml-1.5 w-4 h-4 rounded-full bg-surface-container-highest text-on-surface-variant text-[10px] font-bold">
+            {data.completed.length}
+          </span>
+        </button>
+      </div>
+
+      {/* Task List */}
+      {loading ? (
+        <div className="p-8 text-center text-xs text-on-surface-variant font-medium">Loading tasks...</div>
+      ) : currentList.length === 0 ? (
+        <div className="bg-surface-container-lowest rounded-lg p-8 text-center shadow-sm">
+          <span className="material-symbols-outlined text-4xl text-outline-variant mb-2 block">task_alt</span>
+          <p className="font-headline-sm text-sm font-semibold text-on-surface">No tasks in this list</p>
+          <p className="font-body-sm text-xs text-on-surface-variant mt-1">Enjoy the calm or add a new task.</p>
         </div>
-      )}
-
-      {!loading && !error && currentList.length > 0 && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+      ) : (
+        <div className="flex flex-col gap-2.5">
           {currentList.map((todo) => {
-            const loadingKey = `${todo.id}_normal`;
-            const isDone = Boolean(todo.is_completed);
-
+            const isDone = todo.is_completed || todo.completed_today;
             return (
               <div
                 key={todo.id}
-                className={`todo-card ${isDone ? 'completed' : ''}`}
+                className="task-card group relative flex items-start gap-3 p-3.5 bg-surface-container-lowest rounded-lg shadow-sm hover:shadow-md transition-all duration-200"
               >
                 {/* Circular Checkbox */}
                 <button
-                  type="button"
-                  onClick={() => handleToggle(todo, false)}
-                  className={`todo-checkbox ${isDone ? 'checked' : ''}`}
-                  disabled={actionLoading[loadingKey]}
-                  aria-label={isDone ? `Mark "${todo.title}" as incomplete` : `Mark "${todo.title}" as complete`}
+                  aria-label="Mark task complete"
+                  onClick={() => handleToggle(todo)}
+                  disabled={actionLoading[`${todo.id}_normal`]}
+                  className={`mt-0.5 w-7 h-7 rounded-full flex items-center justify-center transition-all shrink-0 active:scale-90 ${
+                    isDone
+                      ? 'bg-primary text-on-primary shadow-sm'
+                      : 'bg-surface-container hover:bg-surface-container-high text-transparent hover:text-outline'
+                  }`}
                 >
-                  {actionLoading[loadingKey] ? (
-                    <span className="material-symbols-outlined" style={{ fontSize: '16px', color: 'var(--primary)' }}>
-                      sync
-                    </span>
-                  ) : isDone ? (
-                    <span className="material-symbols-outlined">check</span>
-                  ) : null}
+                  <span className="material-symbols-outlined text-[18px]">check</span>
                 </button>
 
-                {/* Task Details */}
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-                    <span
-                      className="todo-title body-lg"
-                      style={{
-                        fontWeight: 600,
-                        color: isDone ? 'var(--on-surface-variant)' : 'var(--on-surface)',
-                        wordBreak: 'break-word'
-                      }}
+                {/* Content */}
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-start justify-between gap-2">
+                    <h3
+                      className={`task-title font-body-lg text-sm font-semibold leading-snug select-none ${
+                        isDone ? 'line-through text-on-surface-variant/60' : 'text-on-surface'
+                      }`}
                     >
                       {todo.title}
-                    </span>
-                    {getPriorityBadge(todo.priority)}
-                    {todo.recurrence && todo.recurrence !== 'one_time' && (
-                      <span
-                        className="badge"
-                        style={{
-                          backgroundColor: 'var(--secondary-container)',
-                          color: 'var(--on-secondary-container)',
-                          fontSize: '11px'
-                        }}
-                      >
-                        <span className="material-symbols-outlined" style={{ fontSize: '13px', marginRight: '4px' }}>
-                          repeat
-                        </span>
-                        {getRecurrenceLabel(todo.recurrence)}
-                      </span>
-                    )}
+                    </h3>
+                    {priorityBadge(todo.priority)}
                   </div>
 
-                  {/* Due Date & Period Metadata */}
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginTop: '4px' }}>
+                  <div className="flex items-center gap-3 mt-2 text-[11px] text-on-surface-variant">
                     {todo.due_date && (
-                      <span className="body-sm" style={{ color: 'var(--on-surface-variant)', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                        <span className="material-symbols-outlined" style={{ fontSize: '14px' }}>event</span>
-                        Due: {todo.due_date}
+                      <span className="inline-flex items-center gap-1">
+                        <span className="material-symbols-outlined text-[14px]">calendar_today</span>
+                        <span>{todo.due_date}</span>
                       </span>
                     )}
                     {todo.recurrence && todo.recurrence !== 'one_time' && (
-                      <span className="body-sm" style={{ color: 'var(--on-surface-variant)' }}>
-                        Current cycle: {todo.current_period_start || 'active'}
+                      <span className="inline-flex items-center gap-1 capitalize text-secondary font-medium">
+                        <span className="material-symbols-outlined text-[14px]">repeat</span>
+                        <span>{todo.recurrence}</span>
                       </span>
                     )}
                   </div>
                 </div>
 
-                {/* Actions: Edit & Delete */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <Link
-                    to={`/todos/${todo.id}/edit`}
-                    className="btn-secondary"
-                    style={{ padding: '6px 10px', fontSize: '12px' }}
-                    title="Edit Todo"
-                  >
-                    <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>edit</span>
-                  </Link>
-                  <button
-                    type="button"
-                    onClick={() => handleDelete(todo)}
-                    className="btn-secondary"
-                    style={{
-                      padding: '6px 10px',
-                      fontSize: '12px',
-                      color: 'var(--error)'
-                    }}
-                    title="Delete Todo"
-                  >
-                    <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>delete</span>
-                  </button>
-                </div>
+                {/* Delete button */}
+                <button
+                  onClick={() => handleDelete(todo.id)}
+                  title="Delete Task"
+                  className="opacity-0 group-hover:opacity-100 text-outline hover:text-error transition-all p-1 rounded-full hover:bg-surface-container-low"
+                >
+                  <span className="material-symbols-outlined text-[18px]">delete</span>
+                </button>
               </div>
             );
           })}

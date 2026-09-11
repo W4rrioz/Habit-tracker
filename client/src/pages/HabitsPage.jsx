@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+﻿import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 
 export default function HabitsPage() {
@@ -16,12 +16,7 @@ export default function HabitsPage() {
       setLoading(true);
       setError(null);
       const res = await fetch('/api/habits', { credentials: 'include' });
-      if (!res.ok) {
-        if (res.status === 401) {
-          throw new Error('Please sign in to view your habits.');
-        }
-        throw new Error('Failed to load habits.');
-      }
+      if (!res.ok) throw new Error('Failed to load habits.');
       const data = await res.json();
       setHabits(data);
     } catch (err) {
@@ -35,12 +30,11 @@ export default function HabitsPage() {
     const toggleKey = `${habitId}-${date}`;
     if (togglingKeys[toggleKey]) return;
 
-    // Optimistic UI update
-    setTogglingKeys(prev => ({ ...prev, [toggleKey]: true }));
-    setHabits(prevHabits =>
-      prevHabits.map(h => {
+    setTogglingKeys((prev) => ({ ...prev, [toggleKey]: true }));
+    setHabits((prevHabits) =>
+      prevHabits.map((h) => {
         if (h.id !== habitId) return h;
-        const updated7Days = (h.last_7_days || []).map(d => {
+        const updated7Days = (h.last_7_days || []).map((d) => {
           if (d.date === date) {
             return { ...d, completed: !d.completed };
           }
@@ -49,7 +43,6 @@ export default function HabitsPage() {
         return {
           ...h,
           last_7_days: updated7Days,
-          last7Days: updated7Days
         };
       })
     );
@@ -59,290 +52,201 @@ export default function HabitsPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({ date })
+        body: JSON.stringify({ date }),
       });
-
-      if (!res.ok) {
-        throw new Error('Failed to update check-in.');
+      if (res.ok) {
+        const result = await res.json();
+        setHabits((prevHabits) =>
+          prevHabits.map((h) => {
+            if (h.id !== habitId) return h;
+            return {
+              ...h,
+              current_streak: result.current_streak,
+              longest_streak: result.longest_streak,
+              total_checkins: result.total_checkins,
+              is_completed_today: result.is_completed_today,
+            };
+          })
+        );
+      } else {
+        await fetchHabits();
       }
-
-      const updated = await res.json();
-      // Apply server authoritative streak calculation
-      setHabits(prevHabits =>
-        prevHabits.map(h => {
-          if (h.id !== habitId) return h;
-          return {
-            ...h,
-            current_streak: updated.current_streak,
-            currentStreak: updated.currentStreak,
-            longest_streak: updated.longest_streak,
-            longestStreak: updated.longestStreak,
-            total_checkins: updated.total_checkins,
-            totalCheckins: updated.totalCheckins,
-            is_completed_today: updated.is_completed_today,
-            isCompletedToday: updated.isCompletedToday,
-            last_7_days: updated.last_7_days || updated.last7Days || h.last_7_days,
-            last7Days: updated.last_7_days || updated.last7Days || h.last_7_days
-          };
-        })
-      );
     } catch (err) {
-      // Revert to backend state on failure
-      fetchHabits();
+      console.error(err);
+      await fetchHabits();
     } finally {
-      setTogglingKeys(prev => {
-        const next = { ...prev };
-        delete next[toggleKey];
-        return next;
-      });
+      setTogglingKeys((prev) => ({ ...prev, [toggleKey]: false }));
     }
   }
 
-  async function handleArchive(habitId) {
-    if (!window.confirm('Archive this habit? You can restore it later.')) {
-      return;
-    }
-
+  async function handleArchive(id) {
+    if (!window.confirm('Archive this habit?')) return;
     try {
-      const res = await fetch(`/api/habits/${habitId}`, {
+      const res = await fetch(`/api/habits/${id}`, {
         method: 'DELETE',
-        credentials: 'include'
+        credentials: 'include',
       });
-      if (!res.ok) {
-        throw new Error('Failed to archive habit.');
-      }
-      setHabits(prev => prev.filter(h => h.id !== habitId));
+      if (!res.ok) throw new Error('Failed to archive habit');
+      await fetchHabits();
     } catch (err) {
       alert(err.message);
     }
   }
 
-  const formatFrequency = (freq) => {
-    if (freq === '3x_week') return '3x / week';
-    if (freq === 'weekly') return 'Weekly';
-    return 'Daily';
+  const getMilestoneBadge = (streak) => {
+    if (streak >= 100) {
+      return (
+        <span className="px-2 py-0.5 rounded-full bg-purple-100 text-purple-800 text-[10px] font-bold">
+          💯 100 Days
+        </span>
+      );
+    }
+    if (streak >= 30) {
+      return (
+        <span className="px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 text-[10px] font-bold">
+          🌟 30 Days
+        </span>
+      );
+    }
+    if (streak >= 7) {
+      return (
+        <span className="px-2 py-0.5 rounded-full bg-teal-100 text-teal-800 text-[10px] font-bold">
+          ⚡ 7 Days
+        </span>
+      );
+    }
+    return null;
   };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '24px', maxWidth: '720px', margin: '0 auto' }}>
-      {/* Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
+    <div className="flex flex-col w-full max-w-[560px] mx-auto pb-12">
+      {/* Top Action & Title Bar */}
+      <div className="flex items-center justify-between mt-2 mb-4">
         <div>
-          <h1 className="headline-lg">My Habits</h1>
-          <p className="body-md" style={{ color: 'var(--on-surface-variant)', marginTop: '2px' }}>
-            Track routines, build streaks, and maintain daily momentum.
+          <h1 className="font-headline-lg text-2xl sm:text-3xl font-bold text-on-surface tracking-tight">
+            My Habits
+          </h1>
+          <p className="font-body-sm text-xs text-on-surface-variant flex items-center gap-1.5 mt-0.5">
+            <span className="inline-block w-2 h-2 rounded-full bg-secondary"></span>
+            <span>Consistency builds lasting peace & flow</span>
           </p>
         </div>
-        <Link to="/habits/new" className="btn-primary" style={{ textDecoration: 'none' }}>
-          <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>add</span>
-          Add Habit
+        <Link
+          to="/habits/new"
+          className="flex items-center gap-1.5 bg-primary text-on-primary hover:bg-primary-container px-4 py-2.5 rounded-full shadow-sm active:scale-95 transition-all font-label-md text-xs font-semibold"
+        >
+          <span className="material-symbols-outlined text-[18px]">add</span>
+          <span>Add Habit</span>
         </Link>
       </div>
 
-      {/* Error state */}
-      {error && (
-        <div
-          className="card"
-          style={{
-            borderColor: 'var(--priority-high-bg)',
-            backgroundColor: 'var(--priority-high-bg)',
-            color: 'var(--priority-high-text)',
-            padding: '16px'
-          }}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <p className="body-md" style={{ fontWeight: '500' }}>{error}</p>
-            <button onClick={fetchHabits} className="btn-secondary" style={{ padding: '4px 10px', fontSize: '12px' }}>
-              Retry
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Loading state */}
-      {loading && !error && (
-        <div className="card" style={{ textAlign: 'center', padding: '48px 24px' }}>
-          <p className="body-md" style={{ color: 'var(--on-surface-variant)' }}>Loading your habits...</p>
-        </div>
-      )}
-
-      {/* Empty state */}
-      {!loading && !error && habits.length === 0 && (
-        <div className="card" style={{ textAlign: 'center', padding: '48px 24px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px' }}>
-          <span className="material-symbols-outlined" style={{ fontSize: '48px', color: 'var(--primary)' }}>
-            calendar_today
-          </span>
-          <h2 className="headline-md">No habits yet</h2>
-          <p className="body-md" style={{ color: 'var(--on-surface-variant)', maxWidth: '360px' }}>
-            Start building your routine today. Pick one manageable habit to practice consistently.
+      {loading ? (
+        <div className="p-8 text-center text-xs text-on-surface-variant font-medium">Loading habits...</div>
+      ) : habits.length === 0 ? (
+        <div className="bg-surface-container-lowest rounded-lg p-8 text-center shadow-sm">
+          <span className="material-symbols-outlined text-4xl text-outline-variant mb-2 block">spa</span>
+          <p className="font-headline-sm text-sm font-semibold text-on-surface">No active habits yet</p>
+          <p className="font-body-sm text-xs text-on-surface-variant mt-1 mb-4">
+            Start small with a daily rhythm like Morning Hydration or Reading.
           </p>
-          <Link to="/habits/new" className="btn-primary" style={{ marginTop: '8px' }}>
-            <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>add</span>
-            Create Your First Habit
+          <Link
+            to="/habits/new"
+            className="inline-flex items-center gap-1.5 bg-primary text-on-primary px-4 py-2 rounded-full text-xs font-semibold shadow-sm"
+          >
+            Create First Habit
           </Link>
         </div>
-      )}
-
-      {/* Habits List */}
-      {!loading && !error && habits.length > 0 && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-          {habits.map(habit => {
-            const currentStreak = habit.current_streak || habit.currentStreak || 0;
-            const longestStreak = habit.longest_streak || habit.longestStreak || 0;
-            const isCompletedToday = Boolean(habit.is_completed_today ?? habit.isCompletedToday);
-            const history7Days = habit.last_7_days || habit.last7Days || [];
-            const todayItem = history7Days.find(d => d.isToday) || history7Days[history7Days.length - 1];
-
-            return (
-              <div key={habit.id} className="habit-card">
-                {/* Card Top Row: Name, Frequency, Actions */}
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '12px' }}>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                    <Link
-                      to={`/habits/${habit.id}`}
-                      style={{ color: 'var(--on-surface)', textDecoration: 'none' }}
-                      onMouseEnter={(e) => (e.target.style.color = 'var(--primary)')}
-                      onMouseLeave={(e) => (e.target.style.color = 'var(--on-surface)')}
-                    >
-                      <h2 className="headline-sm" style={{ fontWeight: '700' }}>{habit.name}</h2>
-                    </Link>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-                      <span
-                        className="badge"
-                        style={{
-                          backgroundColor: 'var(--surface-container)',
-                          color: 'var(--on-surface-variant)',
-                          fontSize: '11px'
-                        }}
-                      >
-                        {formatFrequency(habit.target_frequency)}
-                      </span>
-
-                      {/* Streak Badge */}
-                      <span className="badge badge-streak" title={`Longest: ${longestStreak} days`}>
-                        🔥 {currentStreak} {currentStreak === 1 ? 'day' : 'days'}
-                      </span>
-
-                      {/* Milestone Celebration */}
-                      {currentStreak >= 100 && (
-                        <span className="badge-milestone badge-milestone-100" title="100-day milestone reached!">
-                          💯 100 Days!
-                        </span>
-                      )}
-                      {currentStreak >= 30 && currentStreak < 100 && (
-                        <span className="badge-milestone badge-milestone-30" title="30-day milestone reached!">
-                          🌟 30 Days!
-                        </span>
-                      )}
-                      {currentStreak >= 7 && currentStreak < 30 && (
-                        <span className="badge-milestone badge-milestone-7" title="7-day milestone reached!">
-                          ⚡ 7 Days!
-                        </span>
-                      )}
-
-                      {longestStreak > currentStreak && (
-                        <span className="body-sm" style={{ color: 'var(--on-surface-variant)' }}>
-                          (best: {longestStreak}d)
-                        </span>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Actions: Edit & Archive */}
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                    <Link
-                      to={`/habits/${habit.id}/edit`}
-                      className="btn-secondary"
-                      style={{ padding: '6px 10px', fontSize: '12px' }}
-                      title="Edit Habit"
-                    >
-                      <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>edit</span>
-                    </Link>
-                    <button
-                      onClick={() => handleArchive(habit.id)}
-                      className="btn-secondary"
-                      style={{ padding: '6px 10px', fontSize: '12px', color: 'var(--outline)' }}
-                      title="Archive Habit"
-                    >
-                      <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>archive</span>
-                    </button>
+      ) : (
+        <div className="flex flex-col gap-3">
+          {habits.map((habit) => (
+            <div
+              key={habit.id}
+              className="bg-surface-container-lowest rounded-lg p-4 shadow-sm hover:shadow-md transition-all flex flex-col gap-3 group"
+            >
+              {/* Card Header */}
+              <div className="flex items-start justify-between gap-2">
+                <div>
+                  <Link
+                    to={`/habits/${habit.id}`}
+                    className="font-headline-sm text-sm font-bold text-on-surface hover:text-primary transition-colors block"
+                  >
+                    {habit.name}
+                  </Link>
+                  <div className="flex items-center gap-2 mt-1">
+                    <span className="px-2 py-0.5 rounded-full bg-surface-container text-on-surface-variant text-[10px] font-semibold uppercase tracking-wider">
+                      {habit.target_frequency || 'Daily'}
+                    </span>
+                    {getMilestoneBadge(habit.current_streak)}
                   </div>
                 </div>
 
-                {/* Card Middle: Quick Today Check-In Button */}
-                {todayItem && (
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', backgroundColor: 'var(--surface-container-low)', borderRadius: 'var(--radius-md)' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <span className="label-md" style={{ color: 'var(--on-surface)' }}>
-                        Today's Status
-                      </span>
-                      <span className="body-sm" style={{ color: 'var(--on-surface-variant)' }}>
-                        ({todayItem.date})
-                      </span>
-                    </div>
-                    <button
-                      onClick={() => handleToggleCheckin(habit.id, todayItem.date)}
-                      className={isCompletedToday ? 'btn-primary' : 'btn-secondary'}
-                      style={{
-                        padding: '6px 14px',
-                        fontSize: '13px',
-                        borderRadius: 'var(--radius-full)',
-                        backgroundColor: isCompletedToday ? 'var(--primary)' : 'var(--surface-container-lowest)'
-                      }}
-                    >
-                      <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>
-                        {isCompletedToday ? 'check_circle' : 'radio_button_unchecked'}
-                      </span>
-                      {isCompletedToday ? 'Completed' : 'Mark Done'}
-                    </button>
-                  </div>
-                )}
-
-                {/* Card Bottom: 7-Day History Grid */}
-                <div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                    <span className="label-sm" style={{ color: 'var(--on-surface-variant)' }}>
-                      Last 7 Days (Click any day to toggle)
-                    </span>
-                    <Link
-                      to={`/habits/${habit.id}`}
-                      className="label-sm"
-                      style={{ color: 'var(--primary)', fontWeight: '600' }}
-                    >
-                      Details & History →
-                    </Link>
+                {/* Streak Badge & Actions */}
+                <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-secondary-container text-on-secondary-container text-xs font-bold shadow-sm">
+                    <span className="material-symbols-outlined text-[15px]">local_fire_department</span>
+                    <span>{habit.current_streak}d</span>
                   </div>
 
-                  <div className="history-grid-container">
-                    {history7Days.map((dayObj) => {
-                      const isToggling = Boolean(togglingKeys[`${habit.id}-${dayObj.date}`]);
-                      return (
-                        <button
-                          key={dayObj.date}
-                          type="button"
-                          onClick={() => handleToggleCheckin(habit.id, dayObj.date)}
-                          className={`day-square-btn ${dayObj.completed ? 'completed' : 'pending'} ${dayObj.isToday ? 'is-today' : ''}`}
-                          title={`${dayObj.dayOfWeek} ${dayObj.date}: ${dayObj.completed ? 'Completed' : 'Missed'} (click to toggle)`}
-                          style={{ opacity: isToggling ? 0.6 : 1 }}
-                        >
-                          <span className="day-label">{dayObj.dayOfWeek?.[0] || '•'}</span>
-                          <span className="day-val">
-                            {dayObj.completed ? (
-                              <span className="material-symbols-outlined" style={{ fontSize: '15px' }}>
-                                check
-                              </span>
-                            ) : (
-                              dayObj.day
-                            )}
-                          </span>
-                        </button>
-                      );
-                    })}
-                  </div>
+                  <Link
+                    to={`/habits/${habit.id}/edit`}
+                    className="opacity-0 group-hover:opacity-100 text-outline hover:text-primary transition-all p-1"
+                    title="Edit Habit"
+                  >
+                    <span className="material-symbols-outlined text-[18px]">edit</span>
+                  </Link>
+                  <button
+                    onClick={() => handleArchive(habit.id)}
+                    className="opacity-0 group-hover:opacity-100 text-outline hover:text-error transition-all p-1"
+                    title="Archive Habit"
+                  >
+                    <span className="material-symbols-outlined text-[18px]">delete</span>
+                  </button>
                 </div>
               </div>
-            );
-          })}
+
+              {/* 7-Day History Grid */}
+              <div className="border-t border-outline-variant/15 pt-2.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-medium text-on-surface-variant">Last 7 Days</span>
+                  <Link
+                    to={`/habits/${habit.id}`}
+                    className="text-[11px] font-semibold text-primary hover:underline"
+                  >
+                    View Stats ➔
+                  </Link>
+                </div>
+
+                <div className="flex justify-between items-center mt-2">
+                  {(habit.last_7_days || []).map((day) => {
+                    const isToday = day.is_today;
+                    const isDone = day.completed;
+                    const toggleKey = `${habit.id}-${day.date}`;
+                    return (
+                      <div key={day.date} className="flex flex-col items-center gap-1">
+                        <span className="text-[10px] font-medium text-on-surface-variant">{day.day_name}</span>
+                        <button
+                          onClick={() => handleToggleCheckin(habit.id, day.date)}
+                          disabled={togglingKeys[toggleKey]}
+                          title={`${day.date}: ${isDone ? 'Completed' : 'Missed'}`}
+                          className={`w-7 h-7 rounded-full flex items-center justify-center transition-all active:scale-90 ${
+                            isDone
+                              ? 'bg-secondary text-on-secondary shadow-sm'
+                              : isToday
+                              ? 'border-2 border-dashed border-secondary text-secondary hover:bg-secondary-container/20'
+                              : 'bg-surface-container text-transparent hover:bg-surface-container-high'
+                          }`}
+                        >
+                          <span className="material-symbols-outlined text-[16px]">
+                            {isDone ? 'check' : isToday ? 'add' : ''}
+                          </span>
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          ))}
         </div>
       )}
     </div>

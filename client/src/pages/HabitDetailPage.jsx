@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+﻿import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 
 export default function HabitDetailPage() {
@@ -110,7 +110,6 @@ export default function HabitDetailPage() {
         };
       });
 
-      // Synchronize visual charts & stats
       fetchStats();
     } catch (err) {
       fetchHabit();
@@ -142,23 +141,54 @@ export default function HabitDetailPage() {
     return 'Daily';
   };
 
+  const getMilestoneBadge = (streak) => {
+    if (streak >= 100) {
+      return (
+        <span className="px-2.5 py-0.5 rounded-full bg-purple-100 text-purple-800 text-[11px] font-bold">
+          💯 100 Days!
+        </span>
+      );
+    }
+    if (streak >= 30) {
+      return (
+        <span className="px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-800 text-[11px] font-bold">
+          🌟 30 Days!
+        </span>
+      );
+    }
+    if (streak >= 7) {
+      return (
+        <span className="px-2.5 py-0.5 rounded-full bg-teal-100 text-teal-800 text-[11px] font-bold">
+          ⚡ 7 Days!
+        </span>
+      );
+    }
+    return null;
+  };
+
   if (loading) {
     return (
-      <div style={{ maxWidth: '720px', margin: '40px auto', textAlign: 'center' }}>
-        <p className="body-md" style={{ color: 'var(--on-surface-variant)' }}>Loading habit overview...</p>
+      <div className="w-full max-w-[560px] mx-auto py-16 text-center text-xs text-on-surface-variant font-medium">
+        Loading habit overview...
       </div>
     );
   }
 
   if (error || !habitData) {
     return (
-      <div style={{ maxWidth: '720px', margin: '40px auto', textAlign: 'center' }}>
-        <div className="card" style={{ padding: '32px' }}>
-          <h2 className="headline-md" style={{ marginBottom: '8px' }}>Habit Not Found</h2>
-          <p className="body-md" style={{ color: 'var(--on-surface-variant)', marginBottom: '16px' }}>
+      <div className="w-full max-w-[560px] mx-auto py-12 text-center">
+        <div className="bg-surface-container-lowest rounded-2xl p-8 shadow-sm border border-outline-variant/20 flex flex-col items-center gap-3">
+          <span className="material-symbols-outlined text-4xl text-error">error_outline</span>
+          <h2 className="font-headline text-lg font-bold text-on-surface">Habit Not Found</h2>
+          <p className="font-body text-xs text-on-surface-variant max-w-sm">
             {error || 'The requested habit does not exist or has been removed.'}
           </p>
-          <Link to="/habits" className="btn-primary">Back to Habits</Link>
+          <Link
+            to="/habits"
+            className="mt-2 inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-primary text-on-primary text-xs font-semibold shadow-sm"
+          >
+            Back to Habits
+          </Link>
         </div>
       </div>
     );
@@ -177,179 +207,151 @@ export default function HabitDetailPage() {
   const checkinHistory = habitData.checkins || [];
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '24px', maxWidth: '720px', margin: '0 auto' }}>
+    <div className="w-full max-w-[560px] mx-auto pb-16 flex flex-col gap-4">
       {/* Back Link */}
-      <div>
+      <div className="pt-2">
         <Link
           to="/habits"
-          className="label-sm"
-          style={{ color: 'var(--on-surface-variant)', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
+          className="inline-flex items-center gap-1 text-xs font-semibold text-on-surface-variant hover:text-primary transition-colors"
         >
-          <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>arrow_back</span>
-          Back to My Habits
+          <span className="material-symbols-outlined text-[16px]">arrow_back</span>
+          <span>Back to Habits</span>
         </Link>
       </div>
 
-      {/* Habit Overview Header */}
-      <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '12px' }}>
-          <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
-              <span
-                className="badge"
-                style={{
-                  backgroundColor: 'var(--surface-container)',
-                  color: 'var(--on-surface-variant)',
-                  fontSize: '11px'
-                }}
-              >
+      {/* Habit Overview Card */}
+      <div className="bg-surface-container-lowest rounded-2xl p-5 shadow-sm border border-outline-variant/20 flex flex-col gap-3">
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex flex-col gap-1.5 min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="px-2.5 py-0.5 rounded-full bg-surface-container text-on-surface-variant text-[10px] font-bold uppercase tracking-wider">
                 {formatFrequency(habit.target_frequency)}
               </span>
               {habit.is_archived && (
-                <span
-                  className="badge"
-                  style={{
-                    backgroundColor: 'var(--surface-container-high)',
-                    color: 'var(--outline)',
-                    fontSize: '11px'
-                  }}
-                >
+                <span className="px-2.5 py-0.5 rounded-full bg-surface-container-high text-outline text-[10px] font-semibold">
                   Archived
                 </span>
               )}
+              {getMilestoneBadge(currentStreak)}
             </div>
-            <h1 className="headline-lg">{habit.name}</h1>
+            <h1 className="font-headline text-2xl font-bold text-on-surface tracking-tight truncate">
+              {habit.name}
+            </h1>
           </div>
 
-          {/* Action buttons */}
-          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-            <Link to={`/habits/${id}/edit`} className="btn-secondary" style={{ padding: '8px 14px', fontSize: '13px' }}>
-              <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>edit</span>
-              Edit Habit
+          <div className="flex items-center gap-1.5 shrink-0">
+            <Link
+              to={`/habits/${id}/edit`}
+              className="inline-flex items-center gap-1 px-3 py-1.5 rounded-full bg-surface-container hover:bg-surface-container-high text-on-surface text-xs font-semibold transition-colors"
+            >
+              <span className="material-symbols-outlined text-[16px]">edit</span>
+              <span>Edit</span>
             </Link>
             <button
               onClick={handleArchive}
-              className="btn-secondary"
-              style={{ padding: '8px 12px', fontSize: '13px', color: 'var(--outline)' }}
+              className="p-1.5 rounded-full hover:bg-surface-container text-outline hover:text-error transition-colors"
               title="Archive Habit"
             >
-              <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>archive</span>
+              <span className="material-symbols-outlined text-[18px]">archive</span>
             </button>
           </div>
         </div>
       </div>
 
-      {/* Streak Metrics Cards */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '16px' }}>
+      {/* Streak Metrics Cards (3-column) */}
+      <div className="grid grid-cols-3 gap-2.5 sm:gap-3">
         {/* Current Streak */}
-        <div className="stat-card">
-          <span className="label-sm" style={{ color: 'var(--on-surface-variant)' }}>Current Streak</span>
-          <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px', flexWrap: 'wrap' }}>
-            <span style={{ fontSize: '36px', fontWeight: '800', color: 'var(--primary)', lineHeight: 1 }}>
+        <div className="bg-surface-container-lowest rounded-2xl p-3.5 sm:p-4 shadow-sm border border-outline-variant/20 flex flex-col items-center text-center">
+          <span className="text-[10px] font-bold uppercase tracking-wider text-on-surface-variant">
+            Current
+          </span>
+          <div className="flex items-baseline gap-1 my-1">
+            <span className="text-2xl sm:text-3xl font-extrabold text-primary leading-tight">
               {currentStreak}
             </span>
-            <span className="body-md" style={{ color: 'var(--on-surface-variant)', fontWeight: '600' }}>
-              {currentStreak === 1 ? 'day' : 'days'}
-            </span>
-            {currentStreak >= 100 && (
-              <span className="badge-milestone badge-milestone-100" style={{ marginLeft: '4px' }}>
-                💯 100 Days!
-              </span>
-            )}
-            {currentStreak >= 30 && currentStreak < 100 && (
-              <span className="badge-milestone badge-milestone-30" style={{ marginLeft: '4px' }}>
-                🌟 30 Days!
-              </span>
-            )}
-            {currentStreak >= 7 && currentStreak < 30 && (
-              <span className="badge-milestone badge-milestone-7" style={{ marginLeft: '4px' }}>
-                ⚡ 7 Days!
-              </span>
-            )}
+            <span className="text-[11px] font-medium text-on-surface-variant">d</span>
           </div>
-          <span className="body-sm" style={{ color: 'var(--on-surface-variant)', marginTop: '4px' }}>
-            🔥 Active momentum
+          <span className="text-[10px] text-on-surface-variant flex items-center gap-0.5">
+            <span>🔥</span> Active
           </span>
         </div>
 
         {/* Longest Streak */}
-        <div className="stat-card">
-          <span className="label-sm" style={{ color: 'var(--on-surface-variant)' }}>Longest Streak</span>
-          <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px' }}>
-            <span style={{ fontSize: '36px', fontWeight: '800', color: 'var(--secondary)', lineHeight: 1 }}>
+        <div className="bg-surface-container-lowest rounded-2xl p-3.5 sm:p-4 shadow-sm border border-outline-variant/20 flex flex-col items-center text-center">
+          <span className="text-[10px] font-bold uppercase tracking-wider text-on-surface-variant">
+            Best
+          </span>
+          <div className="flex items-baseline gap-1 my-1">
+            <span className="text-2xl sm:text-3xl font-extrabold text-secondary leading-tight">
               {longestStreak}
             </span>
-            <span className="body-md" style={{ color: 'var(--on-surface-variant)', fontWeight: '600' }}>
-              {longestStreak === 1 ? 'day' : 'days'}
-            </span>
+            <span className="text-[11px] font-medium text-on-surface-variant">d</span>
           </div>
-          <span className="body-sm" style={{ color: 'var(--on-surface-variant)', marginTop: '4px' }}>
-            🏆 Personal record
+          <span className="text-[10px] text-on-surface-variant flex items-center gap-0.5">
+            <span>🏆</span> Record
           </span>
         </div>
 
         {/* Total Check-ins */}
-        <div className="stat-card">
-          <span className="label-sm" style={{ color: 'var(--on-surface-variant)' }}>Total Check-ins</span>
-          <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px' }}>
-            <span style={{ fontSize: '36px', fontWeight: '800', color: 'var(--on-surface)', lineHeight: 1 }}>
+        <div className="bg-surface-container-lowest rounded-2xl p-3.5 sm:p-4 shadow-sm border border-outline-variant/20 flex flex-col items-center text-center">
+          <span className="text-[10px] font-bold uppercase tracking-wider text-on-surface-variant">
+            Total
+          </span>
+          <div className="flex items-baseline gap-1 my-1">
+            <span className="text-2xl sm:text-3xl font-extrabold text-on-surface leading-tight">
               {totalCheckins}
             </span>
-            <span className="body-md" style={{ color: 'var(--on-surface-variant)', fontWeight: '600' }}>
-              times
-            </span>
+            <span className="text-[11px] font-medium text-on-surface-variant">times</span>
           </div>
-          <span className="body-sm" style={{ color: 'var(--on-surface-variant)', marginTop: '4px' }}>
-            ✓ Lifetime consistency
+          <span className="text-[10px] text-on-surface-variant flex items-center gap-0.5">
+            <span>✓</span> Lifetime
           </span>
         </div>
       </div>
 
-      {/* 7-Day History Grid Card */}
-      <div className="card">
-        <div style={{ marginBottom: '16px' }}>
-          <h2 className="headline-sm">7-Day Consistency Grid</h2>
-          <p className="body-sm" style={{ color: 'var(--on-surface-variant)', marginTop: '2px' }}>
-            Tap any day square to quickly mark or unmark completion.
-          </p>
+      {/* 7-Day Consistency Grid */}
+      <div className="bg-surface-container-lowest rounded-2xl p-5 shadow-sm border border-outline-variant/20 flex flex-col gap-3">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="font-headline text-sm font-bold text-on-surface">7-Day Consistency Grid</h2>
+            <p className="font-body text-[11px] text-on-surface-variant">
+              Tap any day to toggle check-in status.
+            </p>
+          </div>
         </div>
 
-        <div className="history-grid-container" style={{ padding: '8px 0' }}>
-          {last7Days.map(dayObj => {
+        <div className="grid grid-cols-7 gap-1.5 sm:gap-2 pt-1">
+          {last7Days.map((dayObj) => {
             const isPending = togglingDate === dayObj.date;
             return (
               <button
                 key={dayObj.date}
                 type="button"
                 onClick={() => handleToggle(dayObj.date)}
-                className={`day-square-btn ${dayObj.completed ? 'completed' : 'pending'} ${dayObj.isToday ? 'is-today' : ''}`}
+                disabled={isPending}
+                className={`flex flex-col items-center justify-center py-2.5 px-1 rounded-xl transition-all ${
+                  dayObj.completed
+                    ? 'bg-primary text-on-primary shadow-sm active:scale-95'
+                    : 'bg-surface-container-low hover:bg-surface-container text-on-surface-variant'
+                } ${dayObj.isToday ? 'ring-2 ring-primary ring-offset-1 ring-offset-surface' : ''}`}
                 title={`${dayObj.dayOfWeek} ${dayObj.date}: ${dayObj.completed ? 'Completed' : 'Missed'} (click to toggle)`}
-                style={{
-                  width: '54px',
-                  height: '64px',
-                  opacity: isPending ? 0.6 : 1
-                }}
               >
-                <span className="day-label" style={{ fontSize: '12px' }}>{dayObj.dayOfWeek}</span>
-                <span className="day-val" style={{ fontSize: '15px' }}>
+                <span className="text-[10px] font-semibold uppercase tracking-wider opacity-80">
+                  {dayObj.dayOfWeek}
+                </span>
+                <span className="text-sm font-bold my-0.5">
                   {dayObj.completed ? (
-                    <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>check</span>
+                    <span className="material-symbols-outlined text-[18px]">check</span>
                   ) : (
                     dayObj.day
                   )}
                 </span>
-                {dayObj.isToday && (
-                  <span
-                    style={{
-                      fontSize: '9px',
-                      fontWeight: '700',
-                      textTransform: 'uppercase',
-                      color: dayObj.completed ? 'rgba(255,255,255,0.9)' : 'var(--primary)',
-                      marginTop: '2px'
-                    }}
-                  >
+                {dayObj.isToday ? (
+                  <span className={`text-[9px] font-bold uppercase tracking-wider ${dayObj.completed ? 'text-white' : 'text-primary'}`}>
                     Today
                   </span>
+                ) : (
+                  <span className="text-[9px] opacity-0 pointer-events-none">•</span>
                 )}
               </button>
             );
@@ -357,39 +359,27 @@ export default function HabitDetailPage() {
         </div>
       </div>
 
-      {/* Recent Check-in History */}
-      <div className="card">
-        <h2 className="headline-sm" style={{ marginBottom: '12px' }}>Recent Check-ins</h2>
+      {/* Recent Check-ins History */}
+      <div className="bg-surface-container-lowest rounded-2xl p-5 shadow-sm border border-outline-variant/20 flex flex-col gap-3">
+        <h2 className="font-headline text-sm font-bold text-on-surface">Recent Check-ins</h2>
         {checkinHistory.length === 0 ? (
-          <p className="body-md" style={{ color: 'var(--on-surface-variant)' }}>
-            No check-in history recorded yet. Complete today's check-in above to start your streak!
+          <p className="font-body text-xs text-on-surface-variant">
+            No check-in history recorded yet. Complete today's check-in to start your streak!
           </p>
         ) : (
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
-            {checkinHistory.slice(0, 14).map(dateStr => (
+          <div className="flex flex-wrap gap-1.5">
+            {checkinHistory.slice(0, 12).map((dateStr) => (
               <span
                 key={dateStr}
-                className="badge"
-                style={{
-                  backgroundColor: 'var(--surface-container-low)',
-                  border: '1px solid var(--surface-container-high)',
-                  color: 'var(--on-surface)',
-                  padding: '6px 12px',
-                  fontSize: '12px',
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '4px'
-                }}
+                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-surface-container text-on-surface text-[11px] font-medium"
               >
-                <span className="material-symbols-outlined" style={{ fontSize: '14px', color: 'var(--primary)' }}>
-                  check_circle
-                </span>
-                {dateStr}
+                <span className="material-symbols-outlined text-[13px] text-primary">check_circle</span>
+                <span>{dateStr}</span>
               </span>
             ))}
-            {checkinHistory.length > 14 && (
-              <span className="body-sm" style={{ alignSelf: 'center', color: 'var(--outline)' }}>
-                +{checkinHistory.length - 14} more
+            {checkinHistory.length > 12 && (
+              <span className="self-center text-xs text-outline font-medium px-2">
+                +{checkinHistory.length - 12} more
               </span>
             )}
           </div>
@@ -398,161 +388,102 @@ export default function HabitDetailPage() {
 
       {/* Stage 6: Consistency Analytics & Visualizations */}
       {statsLoading && !stats ? (
-        <div className="card" style={{ textAlign: 'center', padding: '32px' }}>
-          <p className="body-md" style={{ color: 'var(--on-surface-variant)' }}>Loading habit analytics...</p>
+        <div className="bg-surface-container-lowest rounded-2xl p-8 shadow-sm border border-outline-variant/20 text-center text-xs text-on-surface-variant font-medium">
+          Loading habit analytics...
         </div>
       ) : stats && stats.total_checkins < 3 ? (
         /* Empty State for habits with < 3 check-ins */
-        <div className="card" style={{ textAlign: 'center', padding: '36px 20px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px' }}>
-          <div
-            style={{
-              width: '56px',
-              height: '56px',
-              borderRadius: '50%',
-              backgroundColor: 'var(--surface-container-low)',
-              color: 'var(--primary)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center'
-            }}
-          >
-            <span className="material-symbols-outlined" style={{ fontSize: '30px' }}>
-              insights
-            </span>
+        <div className="bg-surface-container-lowest rounded-2xl p-8 shadow-sm border border-outline-variant/20 flex flex-col items-center text-center gap-3">
+          <div className="w-12 h-12 rounded-full bg-secondary-container text-on-secondary-container flex items-center justify-center">
+            <span className="material-symbols-outlined text-[24px]">insights</span>
           </div>
-          <h2 className="headline-sm" style={{ color: 'var(--on-surface)' }}>Consistency Trends & Charts</h2>
-          <p className="body-md" style={{ color: 'var(--on-surface-variant)', maxWidth: '440px' }}>
-            Not enough data yet — keep checking in to see your trends!
-          </p>
-          <div
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '8px',
-              padding: '6px 14px',
-              borderRadius: 'var(--radius-full)',
-              backgroundColor: 'var(--surface-container-low)',
-              border: '1px solid var(--surface-container-high)',
-              marginTop: '4px'
-            }}
-          >
-            <span className="label-sm" style={{ color: 'var(--primary)' }}>
-              {stats.total_checkins} of 3 check-ins completed to unlock analytics
-            </span>
+          <div>
+            <h2 className="font-headline text-base font-bold text-on-surface">
+              Consistency Trends & Charts
+            </h2>
+            <p className="font-body text-xs text-on-surface-variant max-w-xs mt-1">
+              Not enough data yet — keep checking in to see your trends!
+            </p>
+          </div>
+          <div className="px-3 py-1 rounded-full bg-surface-container text-primary text-[11px] font-bold">
+            {stats.total_checkins} of 3 check-ins completed to unlock analytics
           </div>
         </div>
       ) : stats ? (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-          {/* Section Header */}
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div className="flex flex-col gap-4">
+          {/* Section Title */}
+          <div className="flex items-center justify-between mt-2">
             <div>
-              <h2 className="headline-sm">Consistency Analytics</h2>
-              <p className="body-sm" style={{ color: 'var(--on-surface-variant)' }}>
+              <h2 className="font-headline text-base font-bold text-on-surface">Consistency Analytics</h2>
+              <p className="font-body text-[11px] text-on-surface-variant">
                 Visual breakdowns and long-term momentum tracking
               </p>
             </div>
-            <span
-              className="badge"
-              style={{
-                backgroundColor: 'var(--secondary-container)',
-                color: 'var(--on-secondary-container)',
-                fontSize: '11px'
-              }}
-            >
+            <span className="px-2.5 py-0.5 rounded-full bg-secondary-container text-on-secondary-container text-[11px] font-bold">
               {stats.completion_rate_30d}% 30-Day Rate
             </span>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '16px' }}>
-            {/* 1. Completion Ring (Donut Chart) Card */}
-            <div className="card" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '24px 20px', gap: '20px' }}>
-              <div style={{ width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span className="label-md" style={{ color: 'var(--on-surface)' }}>30-Day Completion Ring</span>
-                <span className="label-sm" style={{ color: 'var(--on-surface-variant)' }}>Rolling 30 Days</span>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {/* 1. Donut Chart Card */}
+            <div className="bg-surface-container-lowest rounded-2xl p-5 shadow-sm border border-outline-variant/20 flex flex-col items-center gap-4">
+              <div className="w-full flex items-center justify-between">
+                <span className="font-headline text-xs font-bold text-on-surface">
+                  30-Day Completion
+                </span>
+                <span className="text-[10px] text-on-surface-variant font-medium">Rolling 30 Days</span>
               </div>
 
-              {/* Donut SVG */}
-              <div style={{ position: 'relative', width: '180px', height: '180px' }}>
+              {/* SVG Ring */}
+              <div className="relative w-36 h-36 flex items-center justify-center">
                 <svg
-                  width="180"
-                  height="180"
-                  viewBox="0 0 180 180"
-                  style={{ transform: 'rotate(-90deg)', width: '100%', height: '100%' }}
+                  className="w-36 h-36 -rotate-90"
+                  viewBox="0 0 160 160"
                 >
-                  {/* Background track (missed/uncompleted) */}
                   <circle
-                    cx="90"
-                    cy="90"
-                    r="72"
+                    cx="80"
+                    cy="80"
+                    r="64"
                     fill="transparent"
-                    stroke="var(--surface-container-high)"
-                    strokeWidth="16"
+                    stroke="currentColor"
+                    strokeWidth="14"
+                    className="text-surface-container"
                   />
-                  {/* Completed active arc */}
                   <circle
-                    cx="90"
-                    cy="90"
-                    r="72"
+                    cx="80"
+                    cy="80"
+                    r="64"
                     fill="transparent"
-                    stroke="var(--secondary)"
-                    strokeWidth="16"
+                    stroke="currentColor"
+                    strokeWidth="14"
                     strokeLinecap="round"
-                    strokeDasharray={2 * Math.PI * 72}
-                    strokeDashoffset={2 * Math.PI * 72 * (1 - (stats.completion_rate_30d || 0) / 100)}
-                    style={{ transition: 'stroke-dashoffset 0.6s ease' }}
+                    strokeDasharray={2 * Math.PI * 64}
+                    strokeDashoffset={2 * Math.PI * 64 * (1 - (stats.completion_rate_30d || 0) / 100)}
+                    className="text-secondary transition-all duration-700 ease-out"
                   />
                 </svg>
 
-                {/* Center metric */}
-                <div
-                  style={{
-                    position: 'absolute',
-                    top: 0,
-                    left: 0,
-                    width: '100%',
-                    height: '100%',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    pointerEvents: 'none'
-                  }}
-                >
-                  <span style={{ fontSize: '32px', fontWeight: '800', color: 'var(--on-surface)', lineHeight: 1 }}>
+                <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                  <span className="text-2xl font-extrabold text-on-surface leading-tight">
                     {stats.completion_rate_30d}%
                   </span>
-                  <span className="label-sm" style={{ color: 'var(--on-surface-variant)', marginTop: '4px' }}>
+                  <span className="text-[10px] font-medium text-on-surface-variant">
                     Completed
                   </span>
                 </div>
               </div>
 
-              {/* Breakdown Legend */}
-              <div style={{ display: 'flex', gap: '20px', justifyContent: 'center', width: '100%', paddingTop: '8px', borderTop: '1px solid var(--surface-container-high)' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <span
-                    style={{
-                      width: '10px',
-                      height: '10px',
-                      borderRadius: '50%',
-                      backgroundColor: 'var(--secondary)'
-                    }}
-                  />
-                  <span className="body-sm" style={{ color: 'var(--on-surface)' }}>
-                    <strong>{stats.completion_ring?.completed || 0}</strong> days completed
+              {/* Legend */}
+              <div className="w-full pt-3 border-t border-outline-variant/10 flex items-center justify-center gap-4 text-xs">
+                <div className="flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full bg-secondary"></span>
+                  <span className="text-on-surface font-medium">
+                    <strong>{stats.completion_ring?.completed || 0}</strong> days
                   </span>
                 </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <span
-                    style={{
-                      width: '10px',
-                      height: '10px',
-                      borderRadius: '50%',
-                      backgroundColor: 'var(--surface-container-high)',
-                      border: '1px solid var(--outline-variant)'
-                    }}
-                  />
-                  <span className="body-sm" style={{ color: 'var(--on-surface-variant)' }}>
+                <div className="flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full bg-surface-container-high border border-outline-variant"></span>
+                  <span className="text-on-surface-variant font-medium">
                     <strong>{stats.completion_ring?.missed || 0}</strong> missed
                   </span>
                 </div>
@@ -560,100 +491,61 @@ export default function HabitDetailPage() {
             </div>
 
             {/* 2. Trends & Distribution Card */}
-            <div className="card" style={{ display: 'flex', flexDirection: 'column', padding: '24px 20px', gap: '16px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
-                <span className="label-md" style={{ color: 'var(--on-surface)' }}>
-                  {chartView === 'dow' ? 'Day of Week Distribution' : `Daily Trend (${trendDays} Days)`}
+            <div className="bg-surface-container-lowest rounded-2xl p-5 shadow-sm border border-outline-variant/20 flex flex-col justify-between gap-3">
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <span className="font-headline text-xs font-bold text-on-surface">
+                  {chartView === 'dow' ? 'Day of Week' : `Trend (${trendDays}d)`}
                 </span>
 
-                {/* View Switcher Pills */}
-                <div style={{ display: 'inline-flex', backgroundColor: 'var(--surface-container-low)', padding: '2px', borderRadius: 'var(--radius-full)', border: '1px solid var(--surface-container-high)' }}>
+                <div className="inline-flex bg-surface-container p-0.5 rounded-full text-[10px]">
                   <button
                     type="button"
                     onClick={() => setChartView('dow')}
-                    style={{
-                      border: 'none',
-                      background: chartView === 'dow' ? 'var(--surface-container-lowest)' : 'transparent',
-                      color: chartView === 'dow' ? 'var(--primary)' : 'var(--on-surface-variant)',
-                      fontWeight: chartView === 'dow' ? '600' : '500',
-                      padding: '4px 10px',
-                      borderRadius: 'var(--radius-full)',
-                      fontSize: '11px',
-                      cursor: 'pointer',
-                      boxShadow: chartView === 'dow' ? 'var(--shadow-sm)' : 'none',
-                      transition: 'all 0.15s ease'
-                    }}
+                    className={`px-2 py-0.5 rounded-full font-semibold transition-all ${
+                      chartView === 'dow'
+                        ? 'bg-surface-container-lowest text-primary shadow-xs'
+                        : 'text-on-surface-variant'
+                    }`}
                   >
-                    Day of Week
+                    Days
                   </button>
                   <button
                     type="button"
                     onClick={() => setChartView('trend')}
-                    style={{
-                      border: 'none',
-                      background: chartView === 'trend' ? 'var(--surface-container-lowest)' : 'transparent',
-                      color: chartView === 'trend' ? 'var(--primary)' : 'var(--on-surface-variant)',
-                      fontWeight: chartView === 'trend' ? '600' : '500',
-                      padding: '4px 10px',
-                      borderRadius: 'var(--radius-full)',
-                      fontSize: '11px',
-                      cursor: 'pointer',
-                      boxShadow: chartView === 'trend' ? 'var(--shadow-sm)' : 'none',
-                      transition: 'all 0.15s ease'
-                    }}
+                    className={`px-2 py-0.5 rounded-full font-semibold transition-all ${
+                      chartView === 'trend'
+                        ? 'bg-surface-container-lowest text-primary shadow-xs'
+                        : 'text-on-surface-variant'
+                    }`}
                   >
-                    Daily Trend
+                    Trend
                   </button>
                 </div>
               </div>
 
               {chartView === 'dow' ? (
-                /* Bar Chart: Day of Week Distribution */
-                <div style={{ display: 'flex', flexDirection: 'column', flex: 1, justifyContent: 'space-between' }}>
-                  <p className="body-sm" style={{ color: 'var(--on-surface-variant)', marginBottom: '8px' }}>
-                    Lifetime check-ins across each day of the week.
-                  </p>
-                  <div
-                    style={{
-                      display: 'flex',
-                      alignItems: 'flex-end',
-                      justifyContent: 'space-between',
-                      height: '150px',
-                      gap: '8px',
-                      padding: '8px 0',
-                      borderBottom: '1px solid var(--surface-container-high)'
-                    }}
-                  >
-                    {(stats.day_of_week_array || []).map(item => {
-                      const maxVal = Math.max(...(stats.day_of_week_array || []).map(d => d.count), 1);
-                      const barPct = item.count > 0 ? Math.max((item.count / maxVal) * 100, 10) : 4;
+                /* Day of Week Distribution */
+                <div className="flex flex-col flex-1 justify-end pt-2">
+                  <div className="flex items-end justify-between h-32 gap-1.5 pb-1 border-b border-outline-variant/15">
+                    {(stats.day_of_week_array || []).map((item) => {
+                      const maxVal = Math.max(...(stats.day_of_week_array || []).map((d) => d.count), 1);
+                      const barPct = item.count > 0 ? Math.max((item.count / maxVal) * 100, 12) : 4;
                       return (
                         <div
                           key={item.day}
-                          style={{
-                            display: 'flex',
-                            flexDirection: 'column',
-                            alignItems: 'center',
-                            flex: 1,
-                            height: '100%',
-                            justifyContent: 'flex-end'
-                          }}
+                          className="flex flex-col items-center flex-1 h-full justify-end"
                         >
-                          <span className="label-sm" style={{ color: 'var(--on-surface-variant)', marginBottom: '4px', fontSize: '11px' }}>
+                          <span className="text-[9px] text-on-surface-variant font-medium mb-1">
                             {item.count}
                           </span>
                           <div
-                            style={{
-                              width: '100%',
-                              maxWidth: '32px',
-                              height: `${barPct}%`,
-                              backgroundColor: item.count > 0 ? 'var(--primary)' : 'var(--surface-container-high)',
-                              borderRadius: '6px 6px 0 0',
-                              transition: 'height 0.3s ease, background-color 0.2s ease'
-                            }}
+                            className={`w-full max-w-[24px] rounded-t-md transition-all duration-300 ${
+                              item.count > 0 ? 'bg-primary' : 'bg-surface-container'
+                            }`}
+                            style={{ height: `${barPct}%` }}
                             title={`${item.day}: ${item.count} check-ins`}
                           />
-                          <span className="label-sm" style={{ color: 'var(--on-surface)', marginTop: '8px', fontSize: '11px' }}>
+                          <span className="text-[10px] font-semibold text-on-surface mt-1.5">
                             {item.day}
                           </span>
                         </div>
@@ -662,118 +554,52 @@ export default function HabitDetailPage() {
                   </div>
                 </div>
               ) : (
-                /* Bar Chart: Daily Completion Trend */
-                <div style={{ display: 'flex', flexDirection: 'column', flex: 1, justifyContent: 'space-between' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                    <p className="body-sm" style={{ color: 'var(--on-surface-variant)' }}>
-                      Completed vs missed daily cadence.
-                    </p>
-                    <div style={{ display: 'inline-flex', gap: '4px' }}>
-                      <button
-                        type="button"
-                        onClick={() => setTrendDays(14)}
-                        style={{
-                          border: 'none',
-                          background: trendDays === 14 ? 'var(--primary-fixed)' : 'var(--surface-container-low)',
-                          color: trendDays === 14 ? 'var(--on-primary-fixed)' : 'var(--on-surface-variant)',
-                          padding: '2px 8px',
-                          borderRadius: 'var(--radius-sm)',
-                          fontSize: '11px',
-                          fontWeight: '600',
-                          cursor: 'pointer'
-                        }}
-                      >
-                        14d
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setTrendDays(30)}
-                        style={{
-                          border: 'none',
-                          background: trendDays === 30 ? 'var(--primary-fixed)' : 'var(--surface-container-low)',
-                          color: trendDays === 30 ? 'var(--on-primary-fixed)' : 'var(--on-surface-variant)',
-                          padding: '2px 8px',
-                          borderRadius: 'var(--radius-sm)',
-                          fontSize: '11px',
-                          fontWeight: '600',
-                          cursor: 'pointer'
-                        }}
-                      >
-                        30d
-                      </button>
-                    </div>
+                /* Daily Trend Bar Chart */
+                <div className="flex flex-col flex-1 justify-end pt-1">
+                  <div className="flex justify-end gap-1 mb-1">
+                    <button
+                      type="button"
+                      onClick={() => setTrendDays(14)}
+                      className={`px-1.5 py-0.5 text-[9px] rounded font-bold ${
+                        trendDays === 14 ? 'bg-primary text-on-primary' : 'text-on-surface-variant'
+                      }`}
+                    >
+                      14d
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setTrendDays(30)}
+                      className={`px-1.5 py-0.5 text-[9px] rounded font-bold ${
+                        trendDays === 30 ? 'bg-primary text-on-primary' : 'text-on-surface-variant'
+                      }`}
+                    >
+                      30d
+                    </button>
                   </div>
 
-                  <div
-                    style={{
-                      display: 'flex',
-                      alignItems: 'flex-end',
-                      justifyContent: 'space-between',
-                      height: '150px',
-                      gap: trendDays === 30 ? '3px' : '6px',
-                      padding: '8px 0',
-                      borderBottom: '1px solid var(--surface-container-high)',
-                      position: 'relative'
-                    }}
-                  >
+                  <div className="flex items-end justify-between h-32 gap-1 pb-1 border-b border-outline-variant/15 relative">
                     {((trendDays === 30 ? stats.daily_trend_30d : stats.daily_trend_14d) || []).map((dayObj, idx) => {
                       const isHovered = hoveredTrendIndex === idx;
                       return (
                         <div
                           key={dayObj.date}
-                          style={{
-                            display: 'flex',
-                            flexDirection: 'column',
-                            alignItems: 'center',
-                            flex: 1,
-                            height: '100%',
-                            justifyContent: 'flex-end',
-                            position: 'relative'
-                          }}
+                          className="flex flex-col items-center flex-1 h-full justify-end relative"
                           onMouseEnter={() => setHoveredTrendIndex(idx)}
                           onMouseLeave={() => setHoveredTrendIndex(null)}
                         >
                           {isHovered && (
-                            <div
-                              style={{
-                                position: 'absolute',
-                                bottom: '100%',
-                                marginBottom: '6px',
-                                backgroundColor: 'var(--inverse-surface)',
-                                color: 'var(--inverse-on-surface)',
-                                padding: '3px 8px',
-                                borderRadius: 'var(--radius-sm)',
-                                fontSize: '10px',
-                                whiteSpace: 'nowrap',
-                                zIndex: 20,
-                                pointerEvents: 'none',
-                                boxShadow: 'var(--shadow-md)'
-                              }}
-                            >
-                              {dayObj.dayOfWeek} {dayObj.date}: {dayObj.completed ? 'Completed ✓' : 'Missed'}
+                            <div className="absolute bottom-full mb-1 bg-inverse-surface text-inverse-on-surface text-[9px] px-1.5 py-0.5 rounded shadow whitespace-nowrap z-20 pointer-events-none">
+                              {dayObj.dayOfWeek} {dayObj.date}: {dayObj.completed ? '✓' : 'Missed'}
                             </div>
                           )}
                           <div
-                            style={{
-                              width: '100%',
-                              maxWidth: trendDays === 30 ? '14px' : '28px',
-                              height: dayObj.completed ? '82%' : '18%',
-                              backgroundColor: dayObj.completed ? 'var(--secondary)' : 'var(--surface-container-high)',
-                              borderRadius: '4px 4px 0 0',
-                              transition: 'all 0.2s ease',
-                              cursor: 'pointer'
-                            }}
+                            className={`w-full rounded-t-xs transition-all ${
+                              dayObj.completed ? 'bg-secondary' : 'bg-surface-container'
+                            }`}
+                            style={{ height: dayObj.completed ? '80%' : '15%' }}
                           />
-                          <span
-                            className="label-sm"
-                            style={{
-                              fontSize: trendDays === 30 ? '8px' : '10px',
-                              color: dayObj.isToday ? 'var(--primary)' : 'var(--on-surface-variant)',
-                              fontWeight: dayObj.isToday ? '700' : '400',
-                              marginTop: '6px'
-                            }}
-                          >
-                            {trendDays === 30 ? (idx % 5 === 0 || idx === 29 ? dayObj.day : '') : dayObj.day}
+                          <span className="text-[8px] text-on-surface-variant mt-1">
+                            {trendDays === 30 ? (idx % 6 === 0 ? dayObj.day : '') : dayObj.day}
                           </span>
                         </div>
                       );
