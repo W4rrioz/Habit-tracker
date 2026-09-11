@@ -12,7 +12,26 @@ dotenv.config();
 // Ensure DATE columns (oid 1082) are returned as 'YYYY-MM-DD' strings without timezone shift
 pg.types.setTypeParser(1082, (val) => val);
 
-const connectionString = process.env.DATABASE_URL;
+function formatConnectionString(uri) {
+  if (!uri) return uri;
+  try {
+    new URL(uri);
+    return uri;
+  } catch (e) {
+    const match = uri.match(/^(postgres(?:ql)?:\/\/[^:]+:)(.*)(@[^@]+)$/);
+    if (match) {
+      const userPart = match[1];
+      const password = match[2];
+      const hostPart = match[3];
+      const fixedPassword = password.replace(/#/g, '%23');
+      return userPart + fixedPassword + hostPart;
+    }
+    return uri;
+  }
+}
+
+const rawConnectionString = process.env.DATABASE_URL;
+const connectionString = formatConnectionString(rawConnectionString);
 
 if (!connectionString) {
   console.error('\n❌ CRITICAL: DATABASE_URL environment variable is missing!');
@@ -26,6 +45,7 @@ export const pool = new pg.Pool({
   idleTimeoutMillis: 30000,
   connectionTimeoutMillis: 10000,
 });
+
 
 
 pool.on('error', (err) => {
