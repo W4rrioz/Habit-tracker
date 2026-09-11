@@ -5,6 +5,7 @@ client/dist/
 .env.local
 .env.*.local
 *.db
+*.zip
 data/
 UI.zip
 extracted_ui/

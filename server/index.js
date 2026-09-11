@@ -38,8 +38,17 @@ app.use('/api/journal', journalRouter);
 app.use('/api/leaderboard', leaderboardRouter);
 app.use('/api/admin', adminRouter);
 
+// Netlify Functions support (in case path is rewritten without /api)
+app.use('/auth', authRouter);
+app.use('/habits', habitsRouter);
+app.use('/todos', todosRouter);
+app.use('/timer', timerRouter);
+app.use('/journal', journalRouter);
+app.use('/leaderboard', leaderboardRouter);
+app.use('/admin', adminRouter);
+
 // Health check endpoint
-app.get('/api/health', async (_req, res) => {
+const healthHandler = async (_req, res) => {
   try {
     const dbRes = await query('SELECT NOW() as now;');
     res.json({
@@ -55,7 +64,9 @@ app.get('/api/health', async (_req, res) => {
       error: err.message
     });
   }
-});
+};
+app.get('/api/health', healthHandler);
+app.get('/health', healthHandler);
 
 // Serve static frontend files when built
 const clientDistPath = path.join(__dirname, '../client/dist');
@@ -72,7 +83,7 @@ app.get('*', (req, res, next) => {
   });
 });
 
-if (!process.env.VERCEL) {
+if (!process.env.VERCEL && !process.env.NETLIFY && !process.env.AWS_LAMBDA_FUNCTION_NAME) {
   try {
     await initDb();
     app.listen(PORT, () => {
