@@ -1,162 +1,187 @@
 # App Flow
 
-## 1. Journey Summary (Plain English)
-An institute admin signs up, sets their institute's payment info (UPI ID or bank details) once, and adds students with fee amounts and due dates. The dashboard shows who currently owes money, sorted by urgency. For any overdue student, the admin taps "Remind" — this opens WhatsApp with a pre-filled message containing the amount due and the institute's payment info, ready to send. Once the parent actually pays (by whatever method), the admin taps "Mark as Paid" and the status updates.
+## 1. Entry Points
+- First visit (no account): lands on Login page; can navigate to Create Account.
+- First visit (has account, no active session): lands on Login page.
+- Returning visit (active session): lands directly on the Daily Dashboard.
 
-## 2. Entry Points
-- First visit: Landing/login page → Sign Up flow (creates institute + admin account).
-- Returning user: Login page → Dashboard.
-- Shared or deep link: Not applicable in v1 (parents never log into the app; they only receive a WhatsApp message).
+## 2. Authentication Flow
+- Create Account: username + password + confirm password -> validated -> account created -> auto-logged-in -> redirected to Dashboard.
+- Login: username + password -> validated against stored hash -> session created -> redirected to Dashboard.
+- Logout: clears session -> redirected to Login.
+- Session expiry / invalid session: any API call returning 401 redirects the user back to Login.
 
-## 3. Authentication Flow
-- Sign up: Admin enters institute name, their email, and a password (or requests a magic link) → institute (tenant) record created → admin lands on an empty Dashboard, prompted to set payment info and add their first student.
-- Sign in: Email + password (or magic link) → Dashboard.
-- Verification: Email verification link sent on signup (standard auth-provider flow).
-- Password recovery: Standard "forgot password" email flow via auth provider.
-- Sign out: Single tap from a profile/settings menu, returns to Login page.
+## 3. Screen Inventory
 
-## 4. Screen Inventory
-
-### Screen: Sign Up
-- Route: `/signup`
-- Purpose: Create a new institute + admin account.
-- Entry conditions: Not logged in.
-- Main content: Institute name, email, password fields.
-- Primary action: Create account.
-- Secondary actions: Link to Sign In.
-- Loading state: Button shows spinner while account is created.
-- Empty state: N/A.
-- Error state: Inline validation (invalid email, weak password).
-- Success state: Redirect to Dashboard with a "set up your payment info, then add your first student" prompt.
-- Next destination: Institute Settings, then Dashboard.
-
-### Screen: Sign In
+### Screen: Login
 - Route: `/login`
-- Purpose: Authenticate an existing admin.
-- Entry conditions: Not logged in.
-- Main content: Email, password fields.
-- Primary action: Log in.
-- Secondary actions: Forgot password, link to Sign Up.
-- Loading state: Button spinner during auth check.
+- Purpose: Authenticate an existing user.
+- Entry conditions: No active session.
+- Main content: Username field, password field, Login button, link to Create Account.
+- Primary action: Submit login.
+- Secondary actions: Navigate to Create Account.
+- Loading state: Button shows "Logging in..." while request is in flight.
 - Empty state: N/A.
-- Error state: "Invalid email or password" inline message.
+- Error state: Inline message for invalid username/password.
 - Success state: Redirect to Dashboard.
-- Next destination: Dashboard.
+- Next destination: Dashboard (success) or Create Account (secondary action).
 
-### Screen: Institute Settings
-- Route: `/settings`
-- Purpose: Set the institute's static payment info (UPI ID and/or bank details) included in every reminder message.
-- Entry conditions: Logged in.
-- Main content: UPI ID field, optional bank details field, optional QR code upload.
-- Primary action: Save.
-- Secondary actions: None.
-- Loading state: Save button spinner.
-- Empty state: Prompted on first login if not yet filled in.
-- Error state: Inline validation on UPI ID format.
-- Success state: Confirmation toast; reminders can now be sent.
-- Next destination: Dashboard.
-
-### Screen: Dashboard (Dues List)
-- Route: `/dashboard`
-- Purpose: Primary screen — shows students with pending/overdue fees, most urgent first.
-- Entry conditions: Logged in.
-- Main content: List/cards of students with name, amount due, due date, status badge (Overdue / Due Soon / Paid).
-- Primary action: Tap a student card → Student Detail; "Remind" and "Mark as Paid" quick-actions per card.
-- Secondary actions: Add Student (floating action button), Search/filter students, Institute Settings, Sign out (menu).
-- Loading state: Skeleton list while fetching.
-- Empty state: "No students yet — add your first student" with a prominent Add Student button.
-- Error state: "Couldn't load dues — showing last known list" with a retry button (uses cached data).
-- Success state: Fully populated, sorted list.
-- Next destination: Student Detail, Add Student form, Reminder action, or Mark as Paid action.
-
-### Screen: Add / Edit Student
-- Route: `/students/new`, `/students/:id/edit`
-- Purpose: Create or update a student's record and fee details.
-- Entry conditions: Logged in, reached via Dashboard's Add Student button or a Student Detail's Edit action.
-- Main content: Name, parent WhatsApp number, fee amount, due date(s)/schedule, optional note (e.g. sibling discount).
-- Primary action: Save.
-- Secondary actions: Cancel, Delete (edit mode only).
-- Loading state: Save button spinner.
-- Empty state: N/A (form).
-- Error state: Inline validation — invalid/missing phone number blocks save with a clear message, since reminders depend on it.
-- Success state: Returns to Dashboard (new mode) or Student Detail (edit mode) with confirmation.
-- Next destination: Dashboard or Student Detail.
-
-### Screen: Student Detail
-- Route: `/students/:id`
-- Purpose: Full view of one student's fee history and status.
-- Entry conditions: Logged in, reached from Dashboard.
-- Main content: Student info, fee amount/schedule, payment status, history of reminders sent and when marked paid.
-- Primary action: Send Reminder / Mark as Paid (whichever applies to current status).
-- Secondary actions: Edit student, Delete student.
-- Loading state: Skeleton while fetching detail.
-- Empty state: "No reminders sent yet" in history section.
-- Error state: "Couldn't load student — retry" message.
-- Success state: Full detail populated.
-- Next destination: Reminder action (opens WhatsApp), Mark as Paid, Edit Student.
-
-### Screen: Send Reminder (Action, not a full page)
-- Route: N/A — triggered from Dashboard card or Student Detail.
-- Purpose: Open WhatsApp with a pre-filled reminder message (amount, due date, institute payment info).
-- Entry conditions: Student has a valid parent phone number and a pending due amount; institute has set payment info.
-- Main content: Brief confirmation of amount/recipient before proceeding (avoids accidental sends).
-- Primary action: Confirm & Open WhatsApp.
-- Secondary actions: Cancel.
-- Loading state: Brief spinner while the message/link is assembled (no network call required in v1 — purely local).
+### Screen: Create Account
+- Route: `/signup`
+- Purpose: Register a new user.
+- Entry conditions: No active session.
+- Main content: Username, password, confirm password fields, Create Account button, link to Login.
+- Primary action: Submit signup.
+- Secondary actions: Navigate to Login.
+- Loading state: Button shows "Creating account..." while request is in flight.
 - Empty state: N/A.
-- Error state: Blocked entirely if phone number is invalid or institute payment info isn't set (prompts admin to fix first).
-- Success state: WhatsApp opens (via wa.me) with pre-filled message; app records that a reminder was sent (visible in Student Detail history).
-- Next destination: Returns to Dashboard or Student Detail.
+- Error state: Inline messages for taken username or mismatched passwords.
+- Success state: Auto-login and redirect to Dashboard.
+- Next destination: Dashboard (success) or Login (secondary action).
 
-### Screen: Mark as Paid (Action, not a full page)
-- Route: N/A — triggered from Dashboard card or Student Detail.
-- Purpose: Record that a fee has actually been paid.
-- Entry conditions: Fee status is pending or overdue.
-- Main content: Simple confirmation ("Mark [Student]'s fee as paid?").
-- Primary action: Confirm.
-- Secondary actions: Cancel; Undo (available briefly after confirming, in case of a mistake).
-- Loading state: Brief spinner during status update.
-- Empty state: N/A.
-- Error state: "Couldn't update — try again" on save failure.
-- Success state: Status flips to Paid, dashboard/detail reflect it immediately.
-- Next destination: Returns to Dashboard or Student Detail.
+### Screen: Daily Dashboard
+- Route: `/`
+- Purpose: One combined view of today's habits, todos, and leftovers.
+- Entry conditions: Active session.
+- Main content: Today's habits list (with check-in toggles), today's todos list, leftovers section.
+- Primary action: Check off a habit or todo directly from this screen.
+- Secondary actions: Navigate to Habits, Todos, Timer, Journal, Leaderboard, or (if admin) Admin Panel via a nav bar; tap "+" to quickly add a habit or todo.
+- Loading state: Skeleton placeholders while data loads.
+- Empty state: New user with nothing set up shows a prompt to add a first habit/todo.
+- Error state: Clear "couldn't load your data" message if the backend is unreachable.
+- Success state: All sections populated and interactive.
+- Next destination: Any nav item; Add Habit/Todo flow.
 
-## 5. Primary User Journey
-1. Admin logs in → lands on Dashboard.
-2. Dashboard shows 3 students overdue, sorted most-overdue-first.
-3. Admin taps "Remind" on the most overdue student.
-4. App shows a brief confirmation ("Send reminder to Rohan's parent for ₹X?").
-5. Admin confirms → WhatsApp opens with a pre-filled message containing the amount, due date, and institute's UPI ID → admin taps Send in WhatsApp.
-6. Parent receives the message and pays via the institute's usual UPI ID or bank transfer.
-7. Admin sees the payment arrive on their own phone (outside the app) and returns to the app.
-8. Admin taps "Mark as Paid" on that student → status updates immediately.
+### Screen: My Habits
+- Route: `/habits`
+- Purpose: Full list of all habits, manage them.
+- Entry conditions: Active session.
+- Main content: List of habit cards (name, frequency, current/longest streak).
+- Primary action: Tap a habit to view its detail/history.
+- Secondary actions: "+ Add Habit"; Edit from within a habit's detail screen.
+- Loading/empty/error/success states: Standard per list-screen conventions (skeleton, "add your first habit," error message, populated list).
+- Next destination: Habit Detail, Add/Edit Habit.
 
-## 6. Secondary Journeys
-- New institute onboarding: Sign Up → set Institute Settings (payment info) → empty Dashboard → Add Student (repeated) → first reminders sent.
-- Editing a mis-entered fee amount: Dashboard → Student Detail → Edit → Save → Dashboard reflects updated amount.
-- Handling a sibling discount: Add/Edit Student → adjust fee amount manually with a note (v1 has no automatic discount logic).
-- Correcting an accidental "Mark as Paid": Student Detail → Undo (if within the undo window) or Edit to revert status manually.
+### Screen: Add / Edit Habit
+- Route: `/habits/new`, `/habits/:id/edit`
+- Purpose: Create or modify a habit.
+- Entry conditions: From My Habits or a habit's detail screen.
+- Main content: Name field, target frequency selector.
+- Primary action: Save.
+- Secondary actions: Cancel; (edit mode) Archive habit.
+- Loading state: "Saving..." on the button.
+- Error state: Inline validation (empty name).
+- Success state: Redirect to My Habits (or Habit Detail if editing).
+- Next destination: My Habits or Habit Detail.
 
-## 7. Decision Points
-- User action: Admin taps "Remind" on a student with no valid phone number, or before institute payment info is set.
-  - Condition: Phone number missing/invalid, or institute payment info empty.
-  - Result: Action blocked.
-  - Destination: Redirected to Edit Student or Institute Settings to fix the issue first.
-- User action: Admin taps "Mark as Paid" by mistake.
-  - Condition: Confirmed within the undo window.
-  - Result: Status reverts to its prior value.
-  - Destination: Stays on the same screen.
+### Screen: Habit Detail
+- Route: `/habits/:id`
+- Purpose: History and stats for one habit.
+- Entry conditions: From My Habits or Dashboard.
+- Main content: Current/longest streak, 7-day-editable history grid, pie chart (completion breakdown), line/bar chart (trend).
+- Primary action: Tap a recent day in the history grid to toggle it.
+- Secondary actions: Edit habit.
+- Loading/empty/error/success states: Standard; "not enough data yet" for new habits' charts.
+- Next destination: My Habits, Edit Habit.
 
-## 8. Edge Cases and Recovery
-- Invalid input: Phone number or amount fails validation → inline error, save blocked.
-- Failed request: Status update fails to save → clear error state with retry.
-- Lost connection: Dashboard falls back to last cached list with a visible "offline/stale data" indicator.
-- Missing permissions: N/A in v1 (single admin role); relevant again once multi-role is added later.
-- Expired session: Redirect to Sign In with a "session expired, please log in again" message.
-- Cancelled action: Admin cancels a reminder or mark-as-paid confirmation → no change made, no record created.
+### Screen: Todos
+- Route: `/todos`
+- Purpose: Manage all tasks.
+- Entry conditions: Active session.
+- Main content: Today / Upcoming / Completed tabs, task rows with checkbox, priority, due date.
+- Primary action: Toggle task completion.
+- Secondary actions: "+ Add Task"; edit/delete a task.
+- Loading/empty/error/success states: Standard per tab.
+- Next destination: Add/Edit Todo.
 
-## 9. Navigation Rules
-- Global navigation: Simple top or bottom bar — Dashboard, Add Student, Settings, Sign Out. Kept minimal given the non-technical user base.
-- Back behaviour: Standard browser/mobile back returns to the previous screen (e.g. Student Detail → Dashboard).
-- Protected routes: All routes except Sign Up/Sign In require an authenticated session; unauthenticated access redirects to Sign In.
-- Deep links: Not required in v1 (no parent-facing routes, no shareable internal links).
+### Screen: Add / Edit Todo
+- Route: `/todos/new`, `/todos/:id/edit`
+- Purpose: Create or modify a task.
+- Entry conditions: From Todos or Dashboard.
+- Main content: Title, due date, priority, recurrence fields.
+- Primary action: Save.
+- Secondary actions: Cancel; (edit mode) Delete.
+- Loading/error/success states: Standard.
+- Next destination: Todos.
+
+### Screen: Focus Timer
+- Route: `/timer`
+- Purpose: Run Pomodoro sessions.
+- Entry conditions: Active session.
+- Main content: Countdown ring, Start/Pause/Reset controls, today's session count.
+- Primary action: Start timer.
+- Secondary actions: Pause, Reset.
+- Success state: Session logged when timer completes naturally (not on manual reset).
+- Next destination: Stays on Timer; session count updates live.
+
+### Screen: Journal
+- Route: `/journal`, `/journal/:date`
+- Purpose: Write/read a daily note.
+- Entry conditions: Active session.
+- Main content: Date header with prev/next navigation, note textarea.
+- Primary action: Save entry.
+- Secondary actions: Browse to a different date.
+- Loading/empty/error/success states: Standard; empty box for dates with no entry yet.
+- Next destination: Stays on Journal, browsing dates.
+
+### Screen: Leaderboard
+- Route: `/leaderboard`
+- Purpose: Compare streaks across users.
+- Entry conditions: Active session.
+- Main content: Ranked list, metric toggle (current/longest streak), logged-in user's row highlighted.
+- Primary action: Toggle ranking metric.
+- Secondary actions: N/A.
+- Loading/empty/error/success states: Standard.
+- Next destination: N/A (standalone view).
+
+### Screen: Admin Panel
+- Route: `/admin`
+- Purpose: List all registered users (admin only).
+- Entry conditions: Active session with `is_admin = true`; any other user attempting this route is redirected away (both client-side nav hidden and server-side access blocked).
+- Main content: Search field, table of users (username, joined date, habit count, todo count).
+- Primary action: N/A (read-only for v1).
+- Secondary actions: Search/filter.
+- Loading/empty/error/success states: Standard.
+- Next destination: N/A.
+
+## 4. Primary User Journey
+1. New visitor lands on Login, taps "Create one" -> Create Account -> fills form -> auto-logged-in -> lands on Dashboard.
+2. Dashboard is empty -> taps "+" -> adds a habit and a todo.
+3. Returns to Dashboard -> checks off today's habit and todo -> streak/stats update.
+4. Later, visits Habit Detail -> sees the pie/line charts starting to populate.
+5. Starts a Focus Timer session while working; it completes and is logged.
+6. End of day, writes a quick Journal entry.
+7. Next day, Dashboard shows yesterday's leftover items (if any weren't completed).
+8. Occasionally checks the Leaderboard to see how their streak compares.
+
+## 5. Secondary Journeys
+- Editing a forgotten check-in from a few days ago via Habit Detail's history grid.
+- An admin logging in and visiting `/admin` to see the full user list.
+- A returning user whose session expired gets redirected to Login, logs back in, and resumes on Dashboard.
+
+## 6. Decision Points
+- Decision: Is the submitted username already taken?
+  - Condition: Uniqueness check on signup.
+  - Result: If taken, reject with inline error; if free, create account.
+  - Destination: Dashboard (success) or stays on Create Account (error).
+- Decision: Is the requesting user's session valid and does it match the resource being accessed?
+  - Condition: Session/ownership check on every data-modifying API call.
+  - Result: If invalid, 401 and redirect to Login; if valid but not the owner, reject; if valid and owner, proceed.
+  - Destination: Varies (Login redirect or normal flow continues).
+- Decision: Has a recurring todo's period (day/week/month) ended without completion?
+  - Condition: Server-side date comparison against the todo's recurrence and completion record.
+  - Result: If ended and incomplete, flagged as leftover; otherwise not.
+  - Destination: Surfaced in the Dashboard's leftovers section.
+
+## 7. Edge Cases and Recovery
+- Duplicate username on signup: blocked with a clear inline message.
+- Session expires mid-use: any subsequent action redirects cleanly to Login rather than failing silently.
+- Non-admin manually navigates to `/admin`: redirected away (and the underlying API call is rejected server-side regardless).
+- Editing a habit check-in outside the allowed 7-day window: the UI simply doesn't allow tapping those days (visually flat/non-interactive).
+- Timer reset before completion: no session is logged — only a full countdown counts.
+
+## 8. Navigation Rules
+- Global navigation: A persistent nav bar/menu (Dashboard, Habits, Todos, Timer, Journal, Leaderboard, and Admin Panel if applicable, Logout) visible on all logged-in screens.
+- Back behavior: Standard browser back navigation works since each screen has its own route.
+- Protected routes: All routes except `/login` and `/signup` require an active session; `/admin` additionally requires `is_admin = true`.
+- Deep links: Habit Detail and Journal date views are bookmarkable/shareable-by-URL for the logged-in user's own convenience.

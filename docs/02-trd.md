@@ -1,65 +1,63 @@
 # Technical Requirements Document
 
 ## 1. Technical Overview
-- Architecture summary: Single web application (mobile-first responsive UI) with a server backend and a relational database, plus one external integration in v1 (WhatsApp click-to-chat). A payment gateway integration is deferred to v2. Multi-tenant via a shared database with a `tenant_id` on every table.
-- Platforms: Web only (mobile browsers primary, desktop secondary).
-- Main technical constraints: Near-zero budget, 5-week solo build, must work on low-end Android devices and unreliable networks, must be simple enough for a solo/student developer to maintain and for Antigravity to generate reliably.
+- Architecture summary: A React frontend talking to a Node/Express backend API, backed by a Supabase (Postgres) database. Custom username/password authentication with session tokens (not Supabase's built-in auth, since the product requirement is plain username+password). All feature logic (streaks, leftover tracking, stats) computed on the backend; frontend focuses on display and interaction.
+- Platforms: Browser (desktop + mobile web).
+- Main technical constraints: Must run entirely on free-tier infrastructure; must support multiple real user accounts with private data; no external OAuth/calendar integrations (explicitly dropped from scope).
 
 ## 2. Technology Stack
-- Frontend: React (mobile-first responsive layout) — reason: large ecosystem, works well with AI code-generation tools, easy to keep lightweight. Rejected alternative: heavier frameworks (Next.js full SSR) — unnecessary complexity for a v1 with modest traffic.
-- Backend: Node.js with Express (or a lightweight framework) — reason: same language as frontend (JS/TS throughout), simplest for a solo developer. Rejected alternative: Python/Django — no strong reason to introduce a second language for this scope.
-- Database: SQLite (local file-based database) for development and the YIIC build — reason: zero setup, no account/signup needed, no internet dependency, fully sufficient for a single-institute pilot demo. Rejected alternative: Supabase/Postgres — a fine choice for a real hosted deployment later, but adds account setup and network dependency that aren't needed to build and demo v1. Migration path: the schema (see Backend Schema) is designed to be portable to Postgres later with minimal changes, since SQLite and Postgres both speak standard SQL.
-- Authentication: Simple email/password auth implemented directly against the SQLite database (e.g. using a lightweight library like `better-sqlite3` + `bcrypt` for password hashing, or a minimal auth package) — reason: no external auth provider account needed. Rejected alternative: Supabase Auth — good option later if migrating to a hosted Postgres setup, not needed for a local-only build.
-- File storage: Not required in v1 (an optional QR-code image for UPI ID is the only possible exception, deferrable).
-- Hosting: Frontend on Vercel/Netlify free tier; backend on Render/Railway free tier — used only once you're ready to demo beyond your own machine (local development is sufficient for most of the build). Rejected alternative: self-managed VPS — unnecessary ops overhead for this stage.
-- Analytics: Skip dedicated analytics tooling in v1; rely on basic server logging.
-- Testing: Manual testing + a small set of automated tests for tenant-isolation logic specifically (the highest-risk area in v1).
+- Frontend: React (Vite) — reason: component model suits many distinct pages/widgets (dashboard, habits, todos, timer, journal, leaderboard, admin) cleanly; large ecosystem for charts and forms. Rejected alternative: plain HTML/JS — would work, but React's reusable components make a multi-page app like this much easier to keep consistent.
+- Backend: Node.js + Express — reason: one language (JavaScript) across the whole stack; simple REST API is sufficient for this app's needs. Rejected alternative: Python/Flask — no real advantage here and splits the stack across two languages.
+- Database: Supabase (hosted Postgres, free tier) — reason: real production-grade SQL database, free tier is generous, and Supabase's table editor UI is genuinely useful for learning/debugging (you can see your data directly). Rejected alternative: Firebase/Firestore — a NoSQL document model fits this relational data (users → habits → checkins) less naturally than Postgres.
+- Authentication: Custom-built (not Supabase Auth) — reason: the product requirement is specifically username+password, and Supabase's built-in auth is email-centric; rolling a simple bcrypt-hashed password + session-token system is well within scope and a genuinely valuable thing to understand end to end. Passwords hashed with bcrypt; sessions via signed tokens stored in an HTTP-only cookie.
+- Charting library: Chart.js (via `react-chartjs-2`) — reason: simple API, supports pie/line/bar out of the box, matches the UI/UX Brief's rounded/soft visual direction well with minor styling.
+- Hosting: Local development for the build phase; optionally deploy later to free tiers (e.g. Vercel for frontend, Render/Railway for backend) once working — not required for early phases.
+- Testing: Manual testing throughout; targeted automated tests for the two trickiest logic areas — streak calculation and leftover-period boundaries — since those are the most bug-prone.
 
 ## 3. System Architecture
-- Client responsibilities: Render dashboard and forms, trigger wa.me links, display due/payment status, handle offline/slow-network gracefully (loading states, retries).
-- Server responsibilities: Enforce tenant isolation on every request, manage student/fee CRUD, handle manual "mark as paid" status updates.
-- Database responsibilities: Store tenants (including their static UPI ID/bank info), admins, students, fee records; enforce data integrity via foreign keys and constraints.
-- External service responsibilities: WhatsApp (client-side wa.me link generation only, no server-side WhatsApp API in v1).
+- Client (React) responsibilities: Render all pages per the UI/UX Brief and page prompts; handle login/session state; call the backend API for all data; render charts from data the backend already computed.
+- Server (Express) responsibilities: Authentication (signup/login/session validation, password hashing); all CRUD for habits/todos/journal entries; streak calculation; leftover-period detection (based on server's system date); leaderboard ranking; admin-only user listing (with access control).
+- Database (Supabase/Postgres) responsibilities: Durable storage for users, habits, checkins, todos, journal entries, and focus-timer session logs.
 
 ## 4. APIs and Integrations
 
-### WhatsApp (wa.me click-to-chat)
-- Purpose: Let admin send a pre-filled reminder message to a parent, containing the amount due and the institute's payment info.
-- Data sent/received: Outbound only — a URL containing a phone number and pre-filled text; no API calls or data returned.
-- Authentication method: None (public URL scheme).
-- Rate/usage limits: None (client-triggered, not automated).
-- Failure handling: If parent's number is missing/invalid, or institute payment info isn't set, block link generation client-side before opening WhatsApp.
-
-### Payment Gateway — DEFERRED TO v2
-- Not part of the v1 build. v1 uses a static UPI ID/bank info (entered once per institute in Settings, included in reminder messages) plus a manual "Mark as Paid" action — no gateway account, API key, or webhook needed to ship v1.
-- When added in v2: Razorpay or Cashfree, generating a trackable UPI link per due amount and confirming payment via signed webhook, replacing manual marking with automatic status updates.
+### Internal REST API (frontend <-> backend)
+- Purpose: All app functionality.
+- Auth endpoints: `POST /auth/signup`, `POST /auth/login`, `POST /auth/logout`, `GET /auth/me` (current session check).
+- Habit endpoints: `GET/POST /habits`, `PUT/DELETE /habits/:id`, `POST /habits/:id/checkin`, `GET /habits/:id/history`, `GET /habits/:id/stats`.
+- Todo endpoints: `GET/POST /todos`, `PUT/DELETE /todos/:id`, `POST /todos/:id/complete`.
+- Leftover endpoint: `GET /leftovers` (computed server-side based on current date vs. recurrence periods).
+- Timer endpoint: `POST /timer/session` (log a completed session), `GET /timer/stats`.
+- Journal endpoints: `GET/POST /journal/:date`.
+- Leaderboard endpoint: `GET /leaderboard?metric=current|longest`.
+- Admin endpoint: `GET /admin/users` (restricted to `is_admin = true`, enforced server-side, not just hidden in the UI).
+- Data sent/received: JSON.
+- Authentication: Session token required (via cookie) on every endpoint except signup/login.
+- Failure handling: Clear JSON error messages surfaced by the frontend; 401 responses on invalid/expired sessions redirect the user to Login.
 
 ## 5. Security and Privacy
-- Authentication and authorisation: Admins authenticate via email/password or magic link; every authenticated request is scoped to the admin's tenant_id server-side (never trust a client-supplied tenant ID).
-- Input validation: Validate phone numbers, amounts, and dates server-side before persisting.
-- Secrets management: Auth provider keys and database credentials stored as server-side environment variables, never shipped to the client. (No payment gateway secrets in v1.)
-- Sensitive data handling: Student names, parent phone numbers, and fee amounts treated as sensitive; access restricted to the owning tenant's authenticated admin only.
-- Abuse prevention: Basic rate-limiting on login endpoints to prevent abuse.
+- Authentication and authorization: Passwords hashed with bcrypt (never stored/logged in plain text); session tokens signed and stored in HTTP-only cookies; every data-modifying endpoint checks the session belongs to the user who owns that data (a user cannot edit another user's habits/todos via a crafted request).
+- Admin access: `is_admin` checked server-side on every admin route, not just hidden in the frontend UI — a non-admin user hitting the admin API directly must still be rejected.
+- Input validation: Non-empty required fields (username, password, habit/task titles); reasonable length limits; dates validated as real dates.
+- Secrets management: Database connection string and session-signing secret stored as environment variables, never committed to the repository.
+- Sensitive data handling: Habits/todos/journal entries are private per-user; only streak values (not raw habit names, unless desired later) are exposed via the leaderboard.
 
 ## 6. Performance Requirements
-- Expected usage: Single pilot institute initially — dozens to low hundreds of student records, low request volume.
-- Loading targets: Dashboard should render usable content within a few seconds on a throttled 3G-equivalent connection.
-- Caching approach: Client-side caching of last-loaded dues list so the dashboard isn't blank on a dropped connection; simple in-memory or CDN caching for static assets.
-- Media optimisation: Minimal — v1 has no significant images/media beyond basic UI icons.
+- Expected usage: A handful to a few dozen users at most, low request volume — no scaling concerns at this stage.
+- Loading targets: Under 1 second for typical actions (check-in, page load, timer start).
+- Caching: Not needed at this scale.
 
 ## 7. Testing and Quality
-- Unit tests: Cover due-status calculation logic (pending/overdue/paid).
-- Integration tests: Cover tenant-isolation checks (an admin from Tenant A cannot fetch Tenant B's data) and the mark-as-paid status update.
-- End-to-end tests: Manual pass through the core user journey (add student → send reminder → mark paid) before each milestone demo.
-- Accessibility checks: Manual check of tap-target sizes, contrast, and readability on an actual low-end Android device.
+- Manual testing: Full click-through of every feature per the PRD's acceptance criteria.
+- Targeted automated tests: Streak-calculation logic (a few constructed date scenarios); leftover-period boundary logic (daily/weekly/monthly edge cases, e.g. what happens exactly at midnight or at a week/month boundary).
+- Security spot-check: Confirm a logged-in user cannot access another user's data by manually trying an API call with someone else's habit/todo ID.
 
 ## 8. Development and Deployment
-- Environments: Local development is sufficient for most of the build; a single hosted "demo" environment is added only when ready to show the pilot institute or for final YIIC submission (no separate staging needed at this scale).
-- Environment variables: Path to the local SQLite database file, and a session/JWT signing secret for auth — all server-side only.
-- CI checks: Lightweight — run tests on push if time allows; not a blocker for a 5-week solo timeline.
-- Deployment approach (when needed): If moving beyond local use later, migrate the database to hosted Postgres (e.g. Supabase) and deploy frontend via Vercel/Netlify, backend via Render/Railway. Not required for the YIIC build itself.
+- Environments: Local development (`npm run dev` frontend, `node server.js` backend, Supabase free-tier project for the database — usable from local dev, no local DB setup needed).
+- Environment variables: Supabase connection details, session-signing secret, backend port.
+- Deployment: Optional later step once the app works locally — frontend to Vercel/Netlify, backend to Render/Railway, both free-tier.
 
 ## 9. Technical Risks and Open Questions
-- Risk: wa.me links are not fully automated (admin must tap "send" manually) — acceptable for v1 given budget, but a known limitation worth stating clearly in the YIIC submission.
-- Risk: Without a payment gateway confirming payment, "Mark as Paid" relies entirely on admin honesty/attentiveness — acceptable for a pilot with a trusted small institute, worth noting as a v1 limitation.
-- Open question: Whether row-level security (database-enforced) or purely application-layer tenant checks are used — recommend using database-level constraints as a second line of defense in addition to application logic, given how costly a tenant-isolation bug would be.
+- Risk: Rolling custom auth means security mistakes are possible if rushed — mitigate by keeping the implementation simple and well-tested (hash passwords, validate sessions on every request, don't trust the frontend for authorization decisions) rather than adding extra auth features.
+- Risk: Leftover-tracking date-boundary logic (especially weekly/monthly) is the trickiest piece in the whole app — worth writing it as an isolated, well-tested module rather than scattering date math across the codebase.
+- Open question: Exact week-start convention (Monday vs. Sunday) for weekly recurrence — must be decided before implementing leftover tracking (see PRD open questions).

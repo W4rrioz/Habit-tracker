@@ -1,89 +1,53 @@
+import React from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
-import { useAuth } from './context/AuthContext';
-import ProtectedRoute from './components/ProtectedRoute';
-import SignUpPage from './pages/SignUpPage';
-import SignInPage from './pages/SignInPage';
+import AppLayout from './components/AppLayout';
+
 import DashboardPage from './pages/DashboardPage';
-import StudentFormPage from './pages/StudentFormPage';
-import StudentDetailPage from './pages/StudentDetailPage';
-import SettingsPage from './pages/SettingsPage';
-import AttendancePage from './pages/AttendancePage';
-import AttendanceCalendarPage from './pages/AttendanceCalendarPage';
+import LoginPage from './pages/LoginPage';
+import SignupPage from './pages/SignupPage';
+import HabitsPage from './pages/HabitsPage';
+import HabitDetailPage from './pages/HabitDetailPage';
+import HabitFormPage from './pages/HabitFormPage';
+import TodosPage from './pages/TodosPage';
+import TodoFormPage from './pages/TodoFormPage';
+import FocusTimerPage from './pages/FocusTimerPage';
+import JournalPage from './pages/JournalPage';
+import LeaderboardPage from './pages/LeaderboardPage';
+import AdminPage from './pages/AdminPage';
 
 export default function App() {
-  const { token, loading } = useAuth();
-
-  // Don't render routes until we know the auth state
-  if (loading) return null;
-
   return (
     <Routes>
-      <Route
-        path="/signup"
-        element={token ? <Navigate to="/dashboard" replace /> : <SignUpPage />}
-      />
-      <Route
-        path="/login"
-        element={token ? <Navigate to="/dashboard" replace /> : <SignInPage />}
-      />
-      <Route
-        path="/dashboard"
-        element={
-          <ProtectedRoute>
-            <DashboardPage />
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/settings"
-        element={
-          <ProtectedRoute>
-            <SettingsPage />
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/students/new"
-        element={
-          <ProtectedRoute>
-            <StudentFormPage />
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/students/:id"
-        element={
-          <ProtectedRoute>
-            <StudentDetailPage />
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/students/:id/edit"
-        element={
-          <ProtectedRoute>
-            <StudentFormPage />
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/attendance"
-        element={
-          <ProtectedRoute>
-            <AttendancePage />
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/attendance/student/:studentId"
-        element={
-          <ProtectedRoute>
-            <AttendanceCalendarPage />
-          </ProtectedRoute>
-        }
-      />
-      {/* Default: redirect to dashboard */}
-      <Route path="*" element={<Navigate to="/dashboard" replace />} />
+      {/* Public Auth Pages */}
+      <Route path="/login" element={<LoginPage />} />
+      <Route path="/signup" element={<SignupPage />} />
+
+      {/* Main App Layout Routes */}
+      <Route element={<AppLayout />}>
+        <Route path="/" element={<DashboardPage />} />
+        
+        {/* Habits */}
+        <Route path="/habits" element={<HabitsPage />} />
+        <Route path="/habits/new" element={<HabitFormPage />} />
+        <Route path="/habits/:id" element={<HabitDetailPage />} />
+        <Route path="/habits/:id/edit" element={<HabitFormPage />} />
+
+        {/* Todos */}
+        <Route path="/todos" element={<TodosPage />} />
+        <Route path="/todos/new" element={<TodoFormPage />} />
+        <Route path="/todos/:id/edit" element={<TodoFormPage />} />
+
+        {/* Focus Timer & Journal */}
+        <Route path="/timer" element={<FocusTimerPage />} />
+        <Route path="/journal" element={<JournalPage />} />
+
+        {/* Leaderboard & Admin */}
+        <Route path="/leaderboard" element={<LeaderboardPage />} />
+        <Route path="/admin" element={<AdminPage />} />
+      </Route>
+
+      {/* Fallback */}
+      <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );
 }

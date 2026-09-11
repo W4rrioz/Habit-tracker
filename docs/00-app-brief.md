@@ -1,38 +1,42 @@
 # App Brief
 
-App name: [TBD — working name: "Fee Reminder"]
+App name: HabitTrack
 
-One-line idea: A mobile-first web app that tracks student fee dues and sends WhatsApp reminders with the institute's payment info; admin marks fees as paid manually in v1.
+One-line idea: A multi-user productivity web app combining habit tracking, a todo list, a focus timer, a daily journal, and a leaderboard — with your own login, visual stats, and an admin view.
 
-Problem it solves: Budget private schools and coaching institutes in Tier-2/3 Indian cities currently track fees on paper or Excel and manually chase parents by phone/WhatsApp, wasting hours every week.
+Problem it solves: Scattered productivity tools (a habit app here, a todo app there, a timer somewhere else) make it hard to see your whole day in one place. HabitTrack combines the core daily-productivity loop into one app you actually own and understand end to end.
 
-Who it is for: Administrators and teachers at small private schools and coaching institutes — not tech-savvy, primarily on Android smartphones.
+Who it is for: Primarily yourself, but built for real multi-user signup so friends/classmates could use it too (hence login + leaderboard).
 
-The main action a user should complete: Admin adds/updates a student's fee status → system helps send a WhatsApp reminder with amount due and payment info in one tap → admin manually marks it paid once received.
+The main action a user should complete: Log in, land on the daily dashboard, see today's habits and todos together, check things off, and watch streaks/stats build up over time.
 
 Must-have features:
-- Student & fee-structure management (add student, assign fee amount/schedule)
-- Due-tracking (who owes what, by when)
-- One-tap WhatsApp reminders (pre-filled message with amount, due date, and the institute's static UPI ID/QR or bank info)
-- Manual "Mark as Paid" action
-- Multi-tenant support (one institute's data isolated from another's)
+- Authentication: create account (separate page) + login (separate page), username + password, hashed, session-based
+- Daily Dashboard: today's habits + today's todos + leftover recurring items, one combined view
+- Habits: add/edit/archive, daily check-in (+ edit last 7 days), current & longest streak, history view, stats (pie chart completion breakdown + line/bar trend chart)
+- Todo List: add/edit/delete, priority (low/medium/high), recurrence (one-time/daily/weekly/monthly), views for Today/Upcoming/Completed
+- Leftover Tracking: at the end of each day/week/month, recurring todos not completed in that period are flagged as "left over" (based on system date, no external calendar)
+- Charts & Visualization: pie charts (completion breakdown) and line/bar charts (trends) for both habits and todos
+- Focus Timer: Pomodoro-style timer (start/pause/reset), logs completed sessions as a daily stat
+- Daily Journal: a short text note per day, browsable by date
+- Leaderboard: ranks users by current or longest streak, highlights the logged-in user's own position
+- Admin Panel: visible only to users with `is_admin = true`, shows a table of all registered users (username, joined date, habit/todo counts)
 
-Nice-to-have features (v2, not required for the YIIC submission):
-- Dynamic, trackable UPI payment links via a payment gateway
-- Automatic payment status update via webhook (replacing manual marking)
-- Attendance module (explicitly deferred — post-fee-module)
-- Sibling discount handling
-- Mid-term admission handling
+Nice-to-have features (explicitly deferred, not in v1):
+- Notifications/reminders
+- Real external calendar sync (Google Calendar) — considered and intentionally dropped in favor of internal system-date-based recurrence, to avoid OAuth complexity
+- Mobile native app
 
-Platform:
-- Web (mobile-first, must work well on cheap Android devices, spotty network)
+Platform: Web app (browser), responsive for desktop and mobile browser use.
 
-Business model, if relevant: Free pilot for the YIIC submission and first coaching center deployment. No monetization logic in v1 — this is a proof-of-concept/learning phase, not a paid product yet.
+Business model: N/A — personal project, but built with real multi-user support.
 
 Important constraints:
-- Deadline: Submission for YIIC 8th Edition (Scaler School of Technology) — 5-week build window, Sept–Oct 2026
-- Budget: Near-zero (student project, age 16) — favor free/low-cost tools and services; no payment gateway account needed for v1
-- Required tools or services: WhatsApp wa.me click-to-chat links (free, no approval process); no payment gateway required for v1 (deferred to v2)
-- Privacy or security requirements: App will store student names, parent phone numbers, and fee amounts — treat as sensitive personal data. Requires per-tenant data isolation, no cross-institute data leakage
+- Deadline: flexible, built around school workload — no hard deadline
+- Budget: $0 — free-tier tools only
+- Required tools: Supabase (free-tier Postgres database) for storage; custom username/password auth (not Supabase's built-in auth service, since the requirement is plain username+password); React frontend; Node/Express backend
+- Privacy/security: passwords must be hashed (never stored in plain text); each user's data (habits, todos, journal entries) is private to them except streak data shown on the leaderboard
 
-References or existing products: None specified — differentiator is deliberately narrow scope vs. full ERPs (Fedena, Entab, etc.)
+Visual direction: Light blue/cyan overall theme, heavily rounded corners (cards, buttons, inputs), simple and minimal — calm and friendly, not cluttered or corporate. See `08-ui-page-prompts.md` for the full per-page design spec.
+
+References: Habit trackers like Loop/Streaks (for the habit side), Todoist (for the todo side), simple Pomodoro apps — but combined into one cohesive daily dashboard rather than separate apps.

@@ -1,115 +1,79 @@
-import { createContext, useContext, useEffect, useState, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect } from 'react';
 
 const AuthContext = createContext(null);
 
-const TOKEN_KEY = 'feereminder_token';
-
 export function AuthProvider({ children }) {
-  const [token, setToken] = useState(() => localStorage.getItem(TOKEN_KEY));
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  // Save or clear token in both state and localStorage
-  function saveToken(newToken) {
-    if (newToken) {
-      localStorage.setItem(TOKEN_KEY, newToken);
-    } else {
-      localStorage.removeItem(TOKEN_KEY);
-    }
-    setToken(newToken);
-  }
-
-  // On mount, validate the stored token by calling the backend
+  // Check existing session on mount / refresh
   useEffect(() => {
-    async function validateToken() {
-      const stored = localStorage.getItem(TOKEN_KEY);
-      if (!stored) {
-        setLoading(false);
-        return;
-      }
-
+    async function checkAuth() {
       try {
-        const res = await fetch('/api/auth/me', {
-          headers: { Authorization: `Bearer ${stored}` },
-        });
-
+        const res = await fetch('/api/auth/me', { credentials: 'include' });
         if (res.ok) {
           const data = await res.json();
-          setUser(data.admin);
+          setUser(data.user);
         } else {
-          // Token is invalid or expired — clear it
-          saveToken(null);
           setUser(null);
         }
-      } catch {
-        // Network error — keep the token but mark as loaded
-        // (the user will see errors when they try to do things)
+      } catch (err) {
+        setUser(null);
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
     }
-
-    validateToken();
+    checkAuth();
   }, []);
 
-  /**
-   * Sign up a new admin + institute.
-   * Calls POST /api/auth/signup on the backend.
-   */
-  async function signUp({ email, password, instituteName }) {
+  async function login(username, password) {
+    const res = await fetch('/api/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ username, password })
+    });
+
+    const data = await res.json();
+    if (!res.ok) {
+      throw new Error(data.error || 'Failed to sign in.');
+    }
+    setUser(data.user);
+    return data.user;
+  }
+
+  async function signup(username, password) {
     const res = await fetch('/api/auth/signup', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password, instituteName }),
+      credentials: 'include',
+      body: JSON.stringify({ username, password })
     });
 
     const data = await res.json();
-
     if (!res.ok) {
-      return { error: data };
+      throw new Error(data.error || 'Failed to create account.');
     }
-
-    saveToken(data.token);
-    setUser(data.admin);
-    return { data };
+    setUser(data.user);
+    return data.user;
   }
 
-  /**
-   * Sign in an existing admin.
-   * Calls POST /api/auth/signin on the backend.
-   */
-  async function signIn({ email, password }) {
-    const res = await fetch('/api/auth/signin', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password }),
-    });
-
-    const data = await res.json();
-
-    if (!res.ok) {
-      return { error: data };
+  async function logout() {
+    try {
+      await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' });
+    } finally {
+      setUser(null);
     }
-
-    saveToken(data.token);
-    setUser(data.admin);
-    return { data };
   }
-
-  function signOut() {
-    saveToken(null);
-    setUser(null);
-  }
-
-  const getToken = useCallback(() => token, [token]);
 
   const value = {
-    token,
     user,
+    setUser,
     loading,
-    signUp,
-    signIn,
-    signOut,
-    getToken,
+    login,
+    signup,
+    logout,
+    isAuthenticated: Boolean(user)
   };
 
   return (

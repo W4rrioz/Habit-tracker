@@ -1,736 +1,1046 @@
-import { useEffect, useState, useCallback, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext';
-import ReminderModal from '../components/ReminderModal';
-import MarkPaidModal from '../components/MarkPaidModal';
-import UndoToast from '../components/UndoToast';
-import ThemeToggle from '../components/ThemeToggle';
-import RemindAllModal from '../components/RemindAllModal';
-import BulkFeeUpdateModal from '../components/BulkFeeUpdateModal';
-import CsvImportModal from '../components/CsvImportModal';
-import CollectionsOverview from '../components/CollectionsOverview';
-import BottomNav from '../components/BottomNav';
 
-const CACHE_KEY = 'feereminder_dashboard_cache';
+function getTodayDateStr() {
+  const d = new Date();
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
 
-/**
- * Screen: Dashboard (Ledger Calm design per mockups)
- *  - Primary view: students with pending/overdue fees, most urgent first.
- *  - Status indicator rails (6px left border on cards).
- *  - 2-column metrics cards with background iconography.
- *  - Quick actions per card: "💬 Remind" and "✓ Mark as Paid".
- *  - Bottom navigation bar with direct link triggers.
- */
+function formatDisplayDate() {
+  const d = new Date();
+  const options = { weekday: 'long', month: 'short', day: 'numeric' };
+  return d.toLocaleDateString('en-US', options);
+}
+
 export default function DashboardPage() {
-  const { signOut, getToken } = useAuth();
-  const [tenantInfo, setTenantInfo] = useState(null);
-  const [tenantSettings, setTenantSettings] = useState(null);
-  const [students, setStudents] = useState([]);
-  const [summary, setSummary] = useState(null);
+  const [habits, setHabits] = useState([]);
+  const [todosData, setTodosData] = useState({ today: [], upcoming: [], completed: [], leftovers: [] });
+  const [timerStats, setTimerStats] = useState({ total_sessions: 0, total_minutes: 0 });
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
-  const [isUsingCache, setIsUsingCache] = useState(false);
+  const [error, setError] = useState(null);
 
-  // Filter & Search states
-  const [searchQuery, setSearchQuery] = useState('');
-  const [activeTab, setActiveTab] = useState('pending'); // 'pending' | 'all' | 'paid'
+  // Action loading states
+  const [actionLoading, setActionLoading] = useState({});
 
-  // Modal states
-  const [reminderStudent, setReminderStudent] = useState(null);
-  const [markPaidStudent, setMarkPaidStudent] = useState(null);
-  const [isRemindAllOpen, setIsRemindAllOpen] = useState(false);
-  const [isBulkUpdateOpen, setIsBulkUpdateOpen] = useState(false);
-  const [isCsvImportOpen, setIsCsvImportOpen] = useState(false);
+  // Quick Add Modal state
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [modalType, setModalType] = useState('habit'); // 'habit' | 'todo'
+  const [habitForm, setHabitForm] = useState({ name: '', target_frequency: 'daily' });
+  const [todoForm, setTodoForm] = useState({
+    title: '',
+    due_date: getTodayDateStr(),
+    priority: 'medium',
+    recurrence: 'one_time'
+  });
+  const [formSubmitting, setFormSubmitting] = useState(false);
+  const [formError, setFormError] = useState(null);
 
-  // Undo Toast state
-  const [undoToast, setUndoToast] = useState(null);
-
-
-  const loadDashboardData = useCallback(async () => {
-    try {
-      setLoading(true);
-      setError('');
-      setIsUsingCache(false);
-      const token = getToken();
-
-      const [authRes, settingsRes, studentsRes] = await Promise.all([
-        fetch('/api/auth/me', {
-          headers: { Authorization: `Bearer ${token}` },
-        }),
-        fetch('/api/settings', {
-          headers: { Authorization: `Bearer ${token}` },
-        }),
-        fetch('/api/students', {
-          headers: { Authorization: `Bearer ${token}` },
-        }),
-      ]);
-
-      if (!authRes.ok || !studentsRes.ok) {
-        throw new Error('Could not connect to server.');
-      }
-
-      const authData = await authRes.json();
-      const settingsData = settingsRes.ok ? await settingsRes.json() : null;
-      const studentsData = await studentsRes.json();
-
-      setTenantInfo(authData.admin);
-      if (settingsData?.settings) {
-        setTenantSettings(settingsData.settings);
-      }
-      setStudents(studentsData.students || []);
-      setSummary(studentsData.summary || null);
-
-      try {
-        localStorage.setItem(
-          CACHE_KEY,
-          JSON.stringify({
-            tenantInfo: authData.admin,
-            tenantSettings: settingsData?.settings || null,
-            students: studentsData.students || [],
-            summary: studentsData.summary || null,
-            cachedAt: new Date().toISOString(),
-          })
-        );
-      } catch {
-        // Ignore localStorage quota errors
-      }
-    } catch (err) {
-      console.warn('Dashboard fetch failed, checking cache:', err);
-      const rawCache = localStorage.getItem(CACHE_KEY);
-      if (rawCache) {
-        try {
-          const cached = JSON.parse(rawCache);
-          setTenantInfo(cached.tenantInfo);
-          setTenantSettings(cached.tenantSettings || null);
-          setStudents(cached.students || []);
-          setSummary(cached.summary || null);
-          setIsUsingCache(true);
-        } catch {
-          setError(err.message || 'Failed to load dues.');
-        }
-      } else {
-        setError(err.message || 'Failed to load dues.');
-      }
-    } finally {
-      setLoading(false);
-    }
-  }, [getToken]);
+  const todayStr = getTodayDateStr();
 
   useEffect(() => {
     loadDashboardData();
-  }, [loadDashboardData]);
+  }, []);
 
-  // Handle Mark as Paid confirmation
-  function handlePaidConfirmed(updatedFee, student) {
-    setUndoToast({
-      feeId: updatedFee.id,
-      studentName: student.name,
-      amount: updatedFee.amount,
-    });
-
-    setStudents((prev) =>
-      prev.map((s) => {
-        if (s.id === student.id) {
-          return {
-            ...s,
-            fee: {
-              ...s.fee,
-              status: 'paid',
-              paid_at: updatedFee.paid_at,
-            },
-          };
-        }
-        return s;
-      })
-    );
-
-    loadDashboardData();
-  }
-
-  // Handle Undo Revert
-  async function handleUndo(feeId) {
+  async function loadDashboardData() {
     try {
-      const token = getToken();
-      const res = await fetch(`/api/fees/${feeId}/revert`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
+      setLoading(true);
+      setError(null);
+
+      const [habitsRes, todosRes, timerRes] = await Promise.all([
+        fetch('/api/habits', { credentials: 'include' }),
+        fetch('/api/todos', { credentials: 'include' }),
+        fetch('/api/timer/today', { credentials: 'include' }).catch(() => null)
+      ]);
+
+      if (!habitsRes.ok) {
+        throw new Error('Could not load habits data.');
+      }
+      if (!todosRes.ok) {
+        throw new Error('Could not load todos data.');
+      }
+
+      const habitsJson = await habitsRes.json();
+      const todosJson = await todosRes.json();
+
+      setHabits(Array.isArray(habitsJson) ? habitsJson : []);
+      setTodosData({
+        today: todosJson.today || [],
+        upcoming: todosJson.upcoming || [],
+        completed: todosJson.completed || [],
+        leftovers: todosJson.leftovers || []
       });
 
-      if (res.ok) {
-        setUndoToast(null);
-        loadDashboardData();
+      if (timerRes && timerRes.ok) {
+        const timerJson = await timerRes.json();
+        setTimerStats({
+          total_sessions: timerJson.total_sessions || 0,
+          total_minutes: timerJson.total_minutes || 0
+        });
       }
     } catch (err) {
-      console.error('Failed to revert fee:', err);
+      console.error('Error loading dashboard:', err);
+      setError(err.message || 'Failed to load dashboard data. Please try again.');
+    } finally {
+      setLoading(false);
     }
   }
 
-  // Filter students based on active tab and search query
-  const filteredStudents = useMemo(() => {
-    return students.filter((student) => {
-      const status = student.fee?.status;
-      if (activeTab === 'pending') {
-        if (status !== 'overdue' && status !== 'pending') return false;
-      } else if (activeTab === 'paid') {
-        if (status !== 'paid') return false;
+  // --- Habit Check-in Toggle ---
+  async function handleToggleHabit(habit) {
+    const key = `habit_${habit.id}`;
+    if (actionLoading[key]) return;
+
+    // Optimistic UI update
+    const previousCompleted = habit.is_completed_today;
+    setHabits(prev =>
+      prev.map(h => {
+        if (h.id !== habit.id) return h;
+        const newCompleted = !previousCompleted;
+        const streakChange = newCompleted ? 1 : -1;
+        return {
+          ...h,
+          is_completed_today: newCompleted,
+          isCompletedToday: newCompleted,
+          current_streak: Math.max(0, (h.current_streak || 0) + streakChange)
+        };
+      })
+    );
+
+    try {
+      setActionLoading(prev => ({ ...prev, [key]: true }));
+      const res = await fetch(`/api/habits/${habit.id}/checkin`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ date: todayStr })
+      });
+
+      if (!res.ok) {
+        throw new Error('Failed to update habit check-in.');
       }
 
-      if (searchQuery.trim()) {
-        const q = searchQuery.toLowerCase().trim();
-        const matchesName = student.name?.toLowerCase().includes(q);
-        const matchesPhone = student.parent_phone?.includes(q);
-        return matchesName || matchesPhone;
+      const updated = await res.json();
+      setHabits(prev =>
+        prev.map(h => {
+          if (h.id !== habit.id) return h;
+          return {
+            ...h,
+            current_streak: updated.current_streak,
+            currentStreak: updated.currentStreak,
+            longest_streak: updated.longest_streak,
+            longestStreak: updated.longestStreak,
+            total_checkins: updated.total_checkins,
+            totalCheckins: updated.totalCheckins,
+            is_completed_today: updated.is_completed_today,
+            isCompletedToday: updated.isCompletedToday,
+            last_7_days: updated.last_7_days || h.last_7_days
+          };
+        })
+      );
+    } catch (err) {
+      console.error(err);
+      // Revert on error
+      loadDashboardData();
+    } finally {
+      setActionLoading(prev => {
+        const next = { ...prev };
+        delete next[key];
+        return next;
+      });
+    }
+  }
+
+  // --- Todo Toggle ---
+  async function handleToggleTodo(todo) {
+    const key = `todo_${todo.id}`;
+    if (actionLoading[key]) return;
+
+    try {
+      setActionLoading(prev => ({ ...prev, [key]: true }));
+      const res = await fetch(`/api/todos/${todo.id}/toggle`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({})
+      });
+
+      if (!res.ok) {
+        throw new Error('Failed to update task.');
       }
 
-      return true;
-    });
-  }, [students, activeTab, searchQuery]);
+      // Refresh todos from server for accurate sorting & recurrence status
+      const refreshRes = await fetch('/api/todos', { credentials: 'include' });
+      if (refreshRes.ok) {
+        const refreshJson = await refreshRes.json();
+        setTodosData({
+          today: refreshJson.today || [],
+          upcoming: refreshJson.upcoming || [],
+          completed: refreshJson.completed || [],
+          leftovers: refreshJson.leftovers || []
+        });
+      }
+    } catch (err) {
+      console.error(err);
+      alert(err.message || 'Error updating task.');
+    } finally {
+      setActionLoading(prev => {
+        const next = { ...prev };
+        delete next[key];
+        return next;
+      });
+    }
+  }
 
-  const overdueStudents = useMemo(() => {
-    return students.filter((s) => s.fee?.status === 'overdue');
-  }, [students]);
+  // --- Leftover Complete Toggle ---
+  async function handleCompleteLeftover(leftover) {
+    const key = `leftover_${leftover.id}_${leftover.leftover_period_start}`;
+    if (actionLoading[key]) return;
 
-  const hasConfiguredPayment = Boolean(
-    tenantSettings?.upi_id?.trim() || tenantSettings?.bank_details?.trim()
-  );
+    try {
+      setActionLoading(prev => ({ ...prev, [key]: true }));
+      const res = await fetch(`/api/todos/${leftover.id}/toggle`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ period_start: leftover.leftover_period_start })
+      });
 
-  // Skeleton Loader View
+      if (!res.ok) {
+        throw new Error('Failed to complete leftover task.');
+      }
+
+      // Re-fetch todos to clear from leftovers
+      const refreshRes = await fetch('/api/todos', { credentials: 'include' });
+      if (refreshRes.ok) {
+        const refreshJson = await refreshRes.json();
+        setTodosData({
+          today: refreshJson.today || [],
+          upcoming: refreshJson.upcoming || [],
+          completed: refreshJson.completed || [],
+          leftovers: refreshJson.leftovers || []
+        });
+      }
+    } catch (err) {
+      console.error(err);
+      alert(err.message || 'Error completing leftover.');
+    } finally {
+      setActionLoading(prev => {
+        const next = { ...prev };
+        delete next[key];
+        return next;
+      });
+    }
+  }
+
+  // --- Quick Add Submit ---
+  async function handleQuickAddSubmit(e) {
+    e.preventDefault();
+    setFormError(null);
+    setFormSubmitting(true);
+
+    try {
+      if (modalType === 'habit') {
+        if (!habitForm.name.trim()) {
+          setFormError('Please enter a habit name.');
+          setFormSubmitting(false);
+          return;
+        }
+
+        const res = await fetch('/api/habits', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({
+            name: habitForm.name.trim(),
+            target_frequency: habitForm.target_frequency
+          })
+        });
+
+        if (!res.ok) {
+          const errData = await res.json();
+          throw new Error(errData.error || 'Failed to create habit.');
+        }
+
+        setHabitForm({ name: '', target_frequency: 'daily' });
+      } else {
+        if (!todoForm.title.trim()) {
+          setFormError('Please enter a task title.');
+          setFormSubmitting(false);
+          return;
+        }
+
+        const res = await fetch('/api/todos', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({
+            title: todoForm.title.trim(),
+            due_date: todoForm.due_date || null,
+            priority: todoForm.priority,
+            recurrence: todoForm.recurrence
+          })
+        });
+
+        if (!res.ok) {
+          const errData = await res.json();
+          throw new Error(errData.error || 'Failed to create task.');
+        }
+
+        setTodoForm({
+          title: '',
+          due_date: getTodayDateStr(),
+          priority: 'medium',
+          recurrence: 'one_time'
+        });
+      }
+
+      setIsModalOpen(false);
+      await loadDashboardData();
+    } catch (err) {
+      setFormError(err.message);
+    } finally {
+      setFormSubmitting(false);
+    }
+  }
+
+  // --- Today's Todos Aggregation (combining active/pending with one-time tasks completed today) ---
+  const todayTodoIds = new Set((todosData.today || []).map(t => t.id));
+  const completedOneTimeToday = (todosData.completed || []).filter(t => {
+    if (t.recurrence !== 'one_time') return false;
+    if (todayTodoIds.has(t.id)) return false;
+    if (t.due_date) return t.due_date === todayStr;
+    return t.created_at && t.created_at.startsWith(todayStr);
+  });
+
+  const dashboardTodos = [...(todosData.today || []), ...completedOneTimeToday];
+
+  // --- Overall Daily Progress Calculation ---
+  const habitsTotal = habits.length;
+  const habitsDone = habits.filter(h => h.is_completed_today).length;
+
+  const todosTotal = dashboardTodos.length;
+  const todosDone = dashboardTodos.filter(t => t.is_completed).length;
+
+  const totalItems = habitsTotal + todosTotal;
+  const totalDone = habitsDone + todosDone;
+  const progressPercent = totalItems > 0 ? Math.round((totalDone / totalItems) * 100) : 0;
+
+  function getProgressMessage() {
+    if (totalItems === 0) {
+      return 'Add your first habit or task to begin cultivating your mindful day.';
+    }
+    if (progressPercent === 100) {
+      return 'Incredible! You have completed all scheduled habits and tasks for today.';
+    }
+    if (progressPercent >= 66) {
+      return 'Mindful momentum is strong. You are almost at 100%!';
+    }
+    if (progressPercent >= 33) {
+      return 'Great progress. Keep moving forward one calm step at a time.';
+    }
+    return 'A calm, intentional day begins with a single check-in.';
+  }
+
+  function getPriorityBadge(priority) {
+    switch (priority) {
+      case 'high':
+        return <span className="badge badge-priority-high">High</span>;
+      case 'low':
+        return <span className="badge badge-priority-low">Low</span>;
+      case 'medium':
+      default:
+        return <span className="badge badge-priority-med">Medium</span>;
+    }
+  }
+
+  function getFrequencyLabel(freq) {
+    switch (freq) {
+      case 'daily':
+        return 'Daily';
+      case '3x_week':
+        return '3x / week';
+      case 'weekly':
+        return 'Weekly';
+      default:
+        return freq;
+    }
+  }
+
   if (loading) {
     return (
-      <div className="page-container">
-        <header className="app-header">
-          <div className="app-header-inner">
-            <div className="app-brand">
-              <div className="app-logo-icon">
-                <span className="material-symbols-outlined" style={{ fontSize: '20px' }}>account_balance</span>
-              </div>
-              <span className="app-brand-title">FeeReminder</span>
-            </div>
-            <ThemeToggle />
-          </div>
-        </header>
-        <div className="metrics-row">
-          <div className="skeleton-card" style={{ height: 100 }} />
-          <div className="skeleton-card" style={{ height: 100 }} />
+      <div className="dashboard-container" style={{ padding: '40px 0', textAlign: 'center' }}>
+        <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', color: 'var(--primary)' }}>
+          <span className="material-symbols-outlined" style={{ animation: 'spin 1s linear infinite' }}>
+            progress_activity
+          </span>
+          <span className="body-md" style={{ fontWeight: '600' }}>Loading today's dashboard...</span>
         </div>
-        <div className="skeleton-card" style={{ height: 140 }} />
-        <div className="skeleton-card" style={{ height: 140 }} />
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="dashboard-container" style={{ padding: '24px 0' }}>
+        <div className="card" style={{ borderColor: 'var(--error-container)', backgroundColor: 'var(--surface-container-low)', textAlign: 'center' }}>
+          <span className="material-symbols-outlined" style={{ fontSize: '36px', color: 'var(--error)', marginBottom: '8px' }}>
+            error_outline
+          </span>
+          <h2 className="headline-sm" style={{ color: 'var(--error)', marginBottom: '8px' }}>Could not load dashboard</h2>
+          <p className="body-md" style={{ color: 'var(--on-surface-variant)', marginBottom: '16px' }}>{error}</p>
+          <button onClick={loadDashboardData} className="btn-primary">
+            <span className="material-symbols-outlined">refresh</span>
+            Try Again
+          </button>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="page-container">
-      {/* App Header Bar */}
-      <header className="app-header">
-        <div className="app-header-inner">
-          <div className="app-brand">
-            <div className="app-logo-icon">
-              <span className="material-symbols-outlined" style={{ fontSize: '20px' }}>account_balance</span>
-            </div>
-            <span className="app-brand-title">FeeReminder</span>
+    <div className="dashboard-container">
+      {/* Top Header & Actions (No weather widget or user avatar photo) */}
+      <div className="dashboard-header">
+        <div className="dashboard-header-left">
+          <div className="dashboard-date-badge">
+            <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>calendar_today</span>
+            <span>{formatDisplayDate()}</span>
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
-            <ThemeToggle />
-            <Link to="/settings" className="nav-btn" title="Institute Settings">
-              <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>settings</span>
-              <span style={{ fontSize: 'var(--font-size-xs)' }}>Settings</span>
-            </Link>
-            <button
-              onClick={signOut}
-              className="nav-btn"
-              style={{ color: 'var(--color-error)' }}
-              title="Sign Out"
-            >
-              <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>logout</span>
-            </button>
-          </div>
+          <h1 className="headline-lg" style={{ color: 'var(--on-surface)', marginTop: '4px' }}>
+            Daily Dashboard
+          </h1>
+          <p className="body-md" style={{ color: 'var(--on-surface-variant)' }}>
+            One calm view for today's habits, tasks, and reflections.
+          </p>
         </div>
-      </header>
 
-      {/* Institute Context & Heading */}
-      <div style={{ marginBottom: 'var(--space-4)' }}>
-        <h1 style={{ fontSize: 'var(--font-size-xl)' }}>Dashboard</h1>
-        {tenantInfo && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '2px', color: 'var(--color-on-surface-variant)' }}>
-            <span className="material-symbols-outlined fill" style={{ fontSize: '16px', color: 'var(--color-primary-container)' }}>
-              school
-            </span>
-            <p style={{ fontSize: 'var(--font-size-sm)', fontWeight: 600 }}>
-              {tenantInfo.tenant_name}
-            </p>
-          </div>
-        )}
-      </div>
-
-      {/* Cached / Offline Fallback Notice */}
-      {isUsingCache && (
-        <div className="alert alert-warning" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <span>⚠️ Showing cached dues list (offline / network error)</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
           <button
-            onClick={loadDashboardData}
-            style={{
-              background: 'none',
-              border: 'none',
-              color: 'var(--color-warning)',
-              fontWeight: 700,
-              cursor: 'pointer',
-              textDecoration: 'underline',
+            onClick={() => {
+              setModalType('habit');
+              setIsModalOpen(true);
             }}
+            className="btn-secondary"
+            title="Quick Add Habit or Task"
           >
-            Retry
+            <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>add</span>
+            Quick Add
           </button>
-        </div>
-      )}
-
-      {/* Missing Payment Info Prompt Banner */}
-      {!hasConfiguredPayment && !loading && (
-        <div className="alert alert-warning" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <div>
-            <strong style={{ fontSize: 'var(--font-size-sm)' }}>Set up your payment details</strong>
-            <p style={{ fontSize: 'var(--font-size-xs)', marginTop: '2px' }}>
-              Add your UPI ID so WhatsApp fee reminders include how to pay.
-            </p>
-          </div>
-          <Link
-            to="/settings"
-            className="btn btn-primary"
-            style={{ width: 'auto', minHeight: '36px', padding: '6px 12px', fontSize: 'var(--font-size-xs)', flexShrink: 0 }}
-          >
-            Setup UPI
+          <Link to="/habits" className="btn-secondary">
+            <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>check_circle</span>
+            Habits
+          </Link>
+          <Link to="/todos" className="btn-secondary">
+            <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>format_list_bulleted</span>
+            Todos
           </Link>
         </div>
-      )}
-
-      {/* Error State */}
-      {error && !isUsingCache && (
-        <div className="alert alert-error" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <span>{error}</span>
-          <button
-            onClick={loadDashboardData}
-            style={{
-              background: 'none',
-              border: 'none',
-              color: 'var(--color-error)',
-              fontWeight: 700,
-              cursor: 'pointer',
-              textDecoration: 'underline',
-            }}
-          >
-            Retry
-          </button>
-        </div>
-      )}
-
-      {/* Metric Overview Cards (2-column tactile grid) */}
-      <div className="metrics-row">
-        {/* Card 1: Total Outstanding */}
-        <div className="metric-card">
-          <div className="metric-icon-bg" style={{ backgroundColor: 'var(--color-primary-fixed)' }}>
-            <span className="material-symbols-outlined" style={{ fontSize: '32px', color: 'var(--color-primary)' }}>
-              account_balance_wallet
-            </span>
-          </div>
-          <span className="metric-label">Total Outstanding</span>
-          <div className="metric-value tabular-nums">
-            ₹{summary ? summary.totalDueAmount.toLocaleString('en-IN') : '0'}
-          </div>
-          <span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-secondary)', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '4px', marginTop: '6px' }}>
-            <span className="material-symbols-outlined" style={{ fontSize: '14px' }}>priority_high</span>
-            {summary ? summary.overdueCount + summary.pendingCount : 0} dues pending
-          </span>
-        </div>
-
-        {/* Card 2: Overdue Count */}
-        <div className="metric-card">
-          <div className="metric-icon-bg" style={{ backgroundColor: 'var(--color-error-container)' }}>
-            <span className="material-symbols-outlined" style={{ fontSize: '32px', color: 'var(--color-error)' }}>
-              warning
-            </span>
-          </div>
-          <span className="metric-label">Overdue Students</span>
-          <div className="metric-value tabular-nums" style={{ color: (summary?.overdueCount || 0) > 0 ? 'var(--color-error)' : 'var(--color-on-surface)' }}>
-            {summary ? summary.overdueCount : 0}
-            <span style={{ fontSize: 'var(--font-size-sm)', fontWeight: 500, color: 'var(--color-on-surface-variant)', marginLeft: '4px' }}>
-              / {students.length} total
-            </span>
-          </div>
-          <span style={{ fontSize: 'var(--font-size-xs)', color: (summary?.overdueCount || 0) > 0 ? 'var(--color-error)' : 'var(--color-tertiary-container)', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '4px', marginTop: '6px' }}>
-            <span className="material-symbols-outlined" style={{ fontSize: '14px' }}>
-              {(summary?.overdueCount || 0) > 0 ? 'event_busy' : 'check_circle'}
-            </span>
-            {(summary?.overdueCount || 0) > 0 ? 'Urgent action required' : 'All accounts healthy'}
-          </span>
-        </div>
       </div>
 
-      {/* Collections Overview: Analytics & Donut Charts */}
-      <CollectionsOverview students={students} summary={summary} />
-
-      {/* Primary CTAs: Add Student, Import CSV & Bulk Actions */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 'var(--space-2)', marginBottom: 'var(--space-3)' }}>
-        <Link to="/students/new" className="btn btn-primary" id="btn-add-student" style={{ minHeight: '44px', padding: '8px 8px', fontSize: 'var(--font-size-xs)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}>
-          <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>person_add</span>
-          <span>Add Student</span>
-        </Link>
-        <button
-          type="button"
-          onClick={() => setIsCsvImportOpen(true)}
-          className="btn btn-secondary"
-          style={{ minHeight: '44px', padding: '8px 8px', fontSize: 'var(--font-size-xs)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}
-        >
-          <span className="material-symbols-outlined" style={{ fontSize: '18px', color: 'var(--color-primary)' }}>upload_file</span>
-          <span>Import CSV</span>
-        </button>
-        <button
-          type="button"
-          onClick={() => setIsBulkUpdateOpen(true)}
-          className="btn btn-secondary"
-          style={{ minHeight: '44px', padding: '8px 8px', fontSize: 'var(--font-size-xs)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}
-        >
-          <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>price_change</span>
-          <span>Bulk Actions</span>
-        </button>
-      </div>
-
-
-      {/* Remind All Overdue Banner */}
-      {overdueStudents.length > 0 && (
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            backgroundColor: 'var(--color-secondary-fixed)',
-            border: '1px solid var(--color-secondary-container)',
-            padding: 'var(--space-3) var(--space-4)',
-            borderRadius: 'var(--radius-lg)',
-            marginBottom: 'var(--space-4)',
-            boxShadow: '0 2px 4px rgba(217, 119, 6, 0.1)',
-          }}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+      {/* Overall Daily Progress Bar */}
+      <div className="daily-progress-card">
+        <div className="daily-progress-top">
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
             <div
               style={{
-                width: '32px',
-                height: '32px',
-                borderRadius: 'var(--radius-full)',
-                backgroundColor: 'rgba(217, 119, 6, 0.2)',
+                width: '40px',
+                height: '40px',
+                borderRadius: '50%',
+                backgroundColor: 'var(--secondary-container)',
+                color: 'var(--on-secondary-container)',
                 display: 'flex',
                 alignItems: 'center',
-                justifyContent: 'center',
-                color: 'var(--color-secondary-container)',
+                justifyContent: 'center'
               }}
             >
-              <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>
-                notifications_active
-              </span>
+              <span className="material-symbols-outlined" style={{ fontSize: '22px' }}>spa</span>
             </div>
             <div>
-              <div style={{ fontSize: 'var(--font-size-xs)', fontWeight: 800, color: 'var(--color-on-secondary-fixed)' }}>
-                {overdueStudents.length} Overdue Dues
-              </div>
-              <div style={{ fontSize: '11px', color: 'var(--color-on-surface-variant)' }}>
-                Queue one-tap WhatsApp reminders
-              </div>
+              <span className="label-sm" style={{ color: 'var(--secondary)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                Mindful Momentum
+              </span>
+              <h2 className="headline-sm" style={{ color: 'var(--on-surface)', margin: 0 }}>
+                Today's Progress
+              </h2>
             </div>
           </div>
-          <button
-            type="button"
-            onClick={() => setIsRemindAllOpen(true)}
-            className="btn btn-secondary"
-            style={{
-              backgroundColor: 'var(--color-secondary-container)',
-              color: '#ffffff',
-              fontSize: 'var(--font-size-xs)',
-              padding: '6px 12px',
-              minHeight: '36px',
-              fontWeight: 700,
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-              border: 'none',
-              boxShadow: '0 1px 2px rgba(0,0,0,0.1)',
-            }}
-          >
-            <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>send</span>
-            Remind All ({overdueStudents.length})
-          </button>
-        </div>
-      )}
-
-      {/* Search & Segmented Filter Tabs */}
-      {students.length > 0 && (
-        <div style={{ marginBottom: 'var(--space-3)' }}>
-          {/* Search Bar */}
-          <div className="search-container">
-            <span className="material-symbols-outlined search-icon">search</span>
-            <input
-              type="text"
-              className="search-input"
-              placeholder="Search by student name or parent phone..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-            />
-          </div>
-
-          {/* Segmented Filter Tabs */}
-          <div className="tabs-container" role="tablist">
-            <button
-              className={`tab-button ${activeTab === 'pending' ? 'active' : ''}`}
-              onClick={() => setActiveTab('pending')}
-              role="tab"
-              type="button"
-            >
-              <span>Pending Dues</span>
-              <span className="tab-badge">{summary ? summary.overdueCount + summary.pendingCount : 0}</span>
-            </button>
-            <button
-              className={`tab-button ${activeTab === 'all' ? 'active' : ''}`}
-              onClick={() => setActiveTab('all')}
-              role="tab"
-              type="button"
-            >
-              <span>All Students</span>
-              <span className="tab-badge">{students.length}</span>
-            </button>
-            <button
-              className={`tab-button ${activeTab === 'paid' ? 'active' : ''}`}
-              onClick={() => setActiveTab('paid')}
-              role="tab"
-              type="button"
-            >
-              <span>Paid</span>
-              <span className="tab-badge">{summary ? summary.paidCount : 0}</span>
-            </button>
+          <div className="daily-progress-stats">
+            <span style={{ fontSize: '24px', fontWeight: '700', color: 'var(--secondary)' }}>
+              {progressPercent}%
+            </span>
+            <span className="label-sm" style={{ color: 'var(--on-surface-variant)' }}>
+              ({totalDone}/{totalItems})
+            </span>
           </div>
         </div>
-      )}
 
-      {/* Student Ledger Card List */}
-      {students.length === 0 ? (
-        <div className="card" style={{ textAlign: 'center', padding: 'var(--space-8) var(--space-4)' }}>
-          <div style={{ width: '56px', height: '56px', borderRadius: 'var(--radius-full)', backgroundColor: 'var(--color-surface-container)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', marginBottom: 'var(--space-3)' }}>
-            <span className="material-symbols-outlined" style={{ fontSize: '32px', color: 'var(--color-primary-container)' }}>group_add</span>
-          </div>
-          <h3 style={{ marginBottom: 'var(--space-2)' }}>No students enrolled yet</h3>
-          <p style={{ color: 'var(--color-on-surface-variant)', marginBottom: 'var(--space-5)', fontSize: 'var(--font-size-sm)' }}>
-            Add your first student to track fee dues and send one-tap WhatsApp reminders.
-          </p>
-          <Link to="/students/new" className="btn btn-primary" style={{ display: 'inline-flex', width: 'auto' }}>
-            <span className="material-symbols-outlined" style={{ fontSize: '20px' }}>person_add</span>
-            <span>Add Your First Student</span>
-          </Link>
+        <p className="body-sm" style={{ color: 'var(--on-surface)' }}>
+          {getProgressMessage()}
+        </p>
+
+        {/* Progress Track & Fill */}
+        <div className="daily-progress-bar-track">
+          <div
+            className="daily-progress-bar-fill"
+            style={{ width: `${progressPercent}%` }}
+          />
         </div>
-      ) : filteredStudents.length === 0 ? (
-        <div className="card" style={{ textAlign: 'center', padding: 'var(--space-6) var(--space-4)' }}>
-          {activeTab === 'paid' ? (
+
+        <div className="daily-progress-breakdown">
+          <span>
+            <strong>Habits:</strong> {habitsDone} of {habitsTotal} checked
+          </span>
+          <span>•</span>
+          <span>
+            <strong>Todos:</strong> {todosDone} of {todosTotal} completed
+          </span>
+          {todosData.leftovers.length > 0 && (
             <>
-              <div style={{ width: '56px', height: '56px', borderRadius: 'var(--radius-full)', backgroundColor: 'var(--color-surface-container)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', marginBottom: 'var(--space-3)' }}>
-                <span className="material-symbols-outlined" style={{ fontSize: '32px', color: 'var(--color-on-surface-variant)' }}>task_alt</span>
-              </div>
-              <h3 style={{ marginBottom: 'var(--space-1)' }}>No paid records this cycle</h3>
-              <p style={{ color: 'var(--color-on-surface-variant)', fontSize: 'var(--font-size-sm)' }}>
-                Once students pay their fees, settled transactions will archive here.
-              </p>
+              <span>•</span>
+              <span style={{ color: '#b45309', fontWeight: '600' }}>
+                {todosData.leftovers.length} leftover {todosData.leftovers.length === 1 ? 'task' : 'tasks'}
+              </span>
             </>
-          ) : activeTab === 'pending' && !searchQuery ? (
-            <>
-              <div style={{ fontSize: '36px', marginBottom: 'var(--space-2)' }}>🎉</div>
-              <h3 style={{ marginBottom: 'var(--space-1)', color: 'var(--color-tertiary-container)' }}>All caught up!</h3>
-              <p style={{ color: 'var(--color-on-surface-variant)', fontSize: 'var(--font-size-sm)', marginBottom: 'var(--space-4)' }}>
-                No pending or overdue fees for any student.
-              </p>
-              <button
-                onClick={() => setActiveTab('all')}
-                className="btn btn-secondary"
-                style={{ width: 'auto', display: 'inline-flex' }}
-              >
-                View All Students
-              </button>
-            </>
-          ) : (
-            <p style={{ color: 'var(--color-on-surface-variant)', fontSize: 'var(--font-size-sm)' }}>
-              No students match your search filter.
-            </p>
           )}
         </div>
-      ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
-          {filteredStudents.map((student) => {
-            const fee = student.fee;
-            const status = fee?.status || 'pending';
-            const isOverdue = status === 'overdue';
-            const isPaid = status === 'paid';
+      </div>
 
-            return (
-              <div key={student.id} className="student-card">
-                {/* 6px Status Rail */}
-                <div
-                  className={`status-rail ${
-                    isPaid ? 'rail-paid' : isOverdue ? 'rail-overdue' : 'rail-due-soon'
-                  }`}
-                />
+      {/* Leftovers Section */}
+      <section className="dashboard-section">
+        <div className="dashboard-section-header">
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <h2 className="headline-sm" style={{ color: 'var(--on-surface)' }}>Leftovers</h2>
+            {todosData.leftovers.length > 0 ? (
+              <span className="badge badge-priority-med">
+                {todosData.leftovers.length} pending
+              </span>
+            ) : (
+              <span className="badge badge-streak" style={{ backgroundColor: '#dcfce7', color: '#166534' }}>
+                All Clear
+              </span>
+            )}
+          </div>
+        </div>
 
-                <div className="student-card-content">
-                  {/* Top Row: Name, Phone & Status Badge */}
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 'var(--space-2)' }}>
-                    <div style={{ minWidth: 0, flex: 1 }}>
-                      <Link
-                        to={`/students/${student.id}`}
-                        style={{ textDecoration: 'none', color: 'inherit' }}
-                      >
-                        <h3 style={{ fontSize: 'var(--font-size-md)', fontWeight: 700, color: 'var(--color-on-surface)' }}>
-                          {student.name}
-                        </h3>
-                      </Link>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginTop: '2px', color: 'var(--color-on-surface-variant)' }}>
-                        <span className="material-symbols-outlined" style={{ fontSize: '15px', color: 'var(--color-outline)' }}>call</span>
-                        <a
-                          href={`tel:${student.parent_phone}`}
-                          style={{ fontSize: 'var(--font-size-sm)', color: 'inherit', textDecoration: 'none' }}
-                        >
-                          {student.parent_phone}
-                        </a>
+        {todosData.leftovers.length > 0 ? (
+          <div className="leftover-banner">
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#92400e' }}>
+              <span className="material-symbols-outlined" style={{ fontSize: '20px' }}>warning</span>
+              <span className="label-md" style={{ fontWeight: '700' }}>
+                Recurring tasks missed from previous periods
+              </span>
+            </div>
+            <p className="body-sm" style={{ color: '#78350f' }}>
+              These recurring tasks ended without being checked off. Complete them now to keep your records consistent.
+            </p>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '4px' }}>
+              {todosData.leftovers.map(item => {
+                const actionKey = `leftover_${item.id}_${item.leftover_period_start}`;
+                const isSubmitting = actionLoading[actionKey];
+
+                return (
+                  <div key={`${item.id}-${item.leftover_period_start}`} className="leftover-item">
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <span className="body-md" style={{ fontWeight: '600', color: 'var(--on-surface)' }}>
+                          {item.title}
+                        </span>
+                        {getPriorityBadge(item.priority)}
                       </div>
+                      <span className="label-sm" style={{ color: '#b45309' }}>
+                        {item.recurrence.toUpperCase()} • Period started {item.leftover_period_start}
+                      </span>
                     </div>
 
-                    {/* Saturated Status Pill Badge */}
-                    <span
-                      className={`badge ${
-                        isPaid ? 'badge-paid' : isOverdue ? 'badge-overdue' : 'badge-due-soon'
-                      }`}
+                    <button
+                      type="button"
+                      className="btn-complete-leftover"
+                      disabled={isSubmitting}
+                      onClick={() => handleCompleteLeftover(item)}
+                      title="Mark leftover as completed"
                     >
-                      {isOverdue && (
-                        <span style={{ width: '6px', height: '6px', borderRadius: 'var(--radius-full)', backgroundColor: '#ffffff' }} />
-                      )}
-                      {isPaid ? 'Paid' : isOverdue ? 'Overdue' : 'Due Soon'}
-                    </span>
+                      <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>check</span>
+                      {isSubmitting ? 'Saving...' : 'Complete'}
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        ) : (
+          <div className="leftover-banner-positive">
+            <span
+              className="material-symbols-outlined"
+              style={{ color: 'var(--secondary)', fontSize: '20px' }}
+            >
+              check_circle
+            </span>
+            <span className="body-sm" style={{ color: 'var(--on-surface-variant)' }}>
+              All caught up! No unfinished recurring items from previous periods.
+            </span>
+          </div>
+        )}
+      </section>
+
+      {/* Today's Habits Section */}
+      <section className="dashboard-section">
+        <div className="dashboard-section-header">
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <h2 className="headline-sm" style={{ color: 'var(--on-surface)' }}>Today's Habits</h2>
+            <span className="badge badge-streak">
+              {habitsDone} / {habitsTotal} checked
+            </span>
+          </div>
+          <Link to="/habits" className="label-sm" style={{ color: 'var(--primary)', fontWeight: '600' }}>
+            Manage Habits →
+          </Link>
+        </div>
+
+        {habits.length === 0 ? (
+          <div className="card" style={{ textAlign: 'center', padding: '32px 16px' }}>
+            <span className="material-symbols-outlined" style={{ fontSize: '40px', color: 'var(--outline)', marginBottom: '8px' }}>
+              self_improvement
+            </span>
+            <h3 className="headline-sm" style={{ marginBottom: '4px' }}>No habits yet</h3>
+            <p className="body-sm" style={{ color: 'var(--on-surface-variant)', marginBottom: '16px' }}>
+              Build consistency by adding your first daily or weekly habit.
+            </p>
+            <button
+              onClick={() => {
+                setModalType('habit');
+                setIsModalOpen(true);
+              }}
+              className="btn-primary"
+            >
+              <span className="material-symbols-outlined">add</span>
+              Add Your First Habit
+            </button>
+          </div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+            {habits.map(habit => {
+              const isChecked = Boolean(habit.is_completed_today);
+              const isBusy = actionLoading[`habit_${habit.id}`];
+
+              return (
+                <div
+                  key={habit.id}
+                  className={`dashboard-habit-item ${isChecked ? 'checked' : ''}`}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '14px', minWidth: 0 }}>
+                    {/* One-tap check-in toggle button (min 44x44px circular tap target) */}
+                    <button
+                      type="button"
+                      aria-label={`Check-in ${habit.name}`}
+                      disabled={isBusy}
+                      onClick={() => handleToggleHabit(habit)}
+                      className={`dashboard-habit-btn ${isChecked ? 'checked' : ''}`}
+                    >
+                      <span
+                        className="material-symbols-outlined"
+                        style={{
+                          fontSize: '22px',
+                          color: isChecked ? '#ffffff' : 'transparent',
+                          fontWeight: '700'
+                        }}
+                      >
+                        check
+                      </span>
+                    </button>
+
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                        <Link
+                          to={`/habits/${habit.id}`}
+                          className="body-lg"
+                          style={{
+                            fontWeight: '600',
+                            color: 'var(--on-surface)',
+                            textDecoration: isChecked ? 'none' : 'none'
+                          }}
+                        >
+                          {habit.name}
+                        </Link>
+                        <span className="label-sm" style={{ color: 'var(--on-surface-variant)', backgroundColor: 'var(--surface-container)', padding: '2px 8px', borderRadius: 'var(--radius-full)' }}>
+                          {getFrequencyLabel(habit.target_frequency)}
+                        </span>
+                      </div>
+
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '4px' }}>
+                        {/* Streak Badge */}
+                        <span className="streak-pill">
+                          <span className="material-symbols-outlined">local_fire_department</span>
+                          {habit.current_streak || 0} day{(habit.current_streak === 1 ? '' : 's')} streak
+                        </span>
+                        {(habit.current_streak || 0) >= 100 && (
+                          <span className="badge-milestone badge-milestone-100" title="100-day milestone reached!">
+                            💯 100 Days!
+                          </span>
+                        )}
+                        {(habit.current_streak || 0) >= 30 && (habit.current_streak || 0) < 100 && (
+                          <span className="badge-milestone badge-milestone-30" title="30-day milestone reached!">
+                            🌟 30 Days!
+                          </span>
+                        )}
+                        {(habit.current_streak || 0) >= 7 && (habit.current_streak || 0) < 30 && (
+                          <span className="badge-milestone badge-milestone-7" title="7-day milestone reached!">
+                            ⚡ 7 Days!
+                          </span>
+                        )}
+                        {habit.longest_streak > (habit.current_streak || 0) && (
+                          <span className="label-sm" style={{ color: 'var(--on-surface-variant)' }}>
+                            (best: {habit.longest_streak}d)
+                          </span>
+                        )}
+                      </div>
+                    </div>
                   </div>
 
-                  {/* Financial Info Box */}
-                  {fee && (
-                    <div className={`amount-due-box ${isOverdue ? 'overdue' : isPaid ? 'paid' : ''}`}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: isOverdue ? 'var(--color-error)' : 'var(--color-on-surface-variant)', fontSize: 'var(--font-size-sm)', fontWeight: 600 }}>
-                        <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>
-                          {isPaid ? 'check_circle' : isOverdue ? 'calendar_clock' : 'calendar_today'}
-                        </span>
-                        <span>{isPaid ? 'Settled' : `Due: ${fee.due_date}`}</span>
-                      </div>
-                      <div className="tabular-nums" style={{ textAlign: 'right' }}>
-                        <span style={{ fontSize: 'var(--font-size-xs)', fontWeight: 700, color: 'var(--color-primary-container)', marginRight: '2px' }}>₹</span>
-                        <span style={{ fontSize: 'var(--font-size-lg)', fontWeight: 700, color: isOverdue ? 'var(--color-error)' : 'var(--color-primary-container)' }}>
-                          {fee.amount.toLocaleString('en-IN')}
-                        </span>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Quick Action Row */}
-                  {fee && !isPaid && (
-                    <div className="card-actions">
-                      <button
-                        onClick={(e) => {
-                          e.preventDefault();
-                          setReminderStudent(student);
-                        }}
-                        className="card-action-btn card-action-btn-remind"
-                        type="button"
-                      >
-                        <span className="material-symbols-outlined fill" style={{ fontSize: '18px' }}>chat</span>
-                        <span>Remind</span>
-                      </button>
-
-                      <button
-                        onClick={(e) => {
-                          e.preventDefault();
-                          setMarkPaidStudent(student);
-                        }}
-                        className="card-action-btn card-action-btn-pay"
-                        type="button"
-                      >
-                        <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>check_circle</span>
-                        <span>Mark as Paid</span>
-                      </button>
-                    </div>
-                  )}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <Link
+                      to={`/habits/${habit.id}`}
+                      className="btn-secondary"
+                      style={{ padding: '6px 12px', fontSize: '12px' }}
+                    >
+                      Details
+                    </Link>
+                  </div>
                 </div>
+              );
+            })}
+          </div>
+        )}
+      </section>
+
+      {/* Today's Todos Section */}
+      <section className="dashboard-section">
+        <div className="dashboard-section-header">
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <h2 className="headline-sm" style={{ color: 'var(--on-surface)' }}>Today's Todos</h2>
+            <span className="badge badge-priority-low">
+              {todosTotal - todosDone} pending • {todosDone} done
+            </span>
+          </div>
+          <Link to="/todos" className="label-sm" style={{ color: 'var(--primary)', fontWeight: '600' }}>
+            View All Todos →
+          </Link>
+        </div>
+
+        {dashboardTodos.length === 0 ? (
+          <div className="card" style={{ textAlign: 'center', padding: '32px 16px' }}>
+            <span className="material-symbols-outlined" style={{ fontSize: '40px', color: 'var(--outline)', marginBottom: '8px' }}>
+              task_alt
+            </span>
+            <h3 className="headline-sm" style={{ marginBottom: '4px' }}>No tasks scheduled for today</h3>
+            <p className="body-sm" style={{ color: 'var(--on-surface-variant)', marginBottom: '16px' }}>
+              Enjoy your mindful breathing or add a new action item to focus on.
+            </p>
+            <button
+              onClick={() => {
+                setModalType('todo');
+                setIsModalOpen(true);
+              }}
+              className="btn-primary"
+            >
+              <span className="material-symbols-outlined">add</span>
+              Add a Task
+            </button>
+          </div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+            {dashboardTodos.map(todo => {
+              const isChecked = Boolean(todo.is_completed);
+              const isBusy = actionLoading[`todo_${todo.id}`];
+
+              return (
+                <div
+                  key={todo.id}
+                  className={`dashboard-todo-item ${isChecked ? 'completed' : ''}`}
+                >
+                  {/* Circular completion checkbox */}
+                  <button
+                    type="button"
+                    aria-label={`Toggle task completion: ${todo.title}`}
+                    disabled={isBusy}
+                    onClick={() => handleToggleTodo(todo)}
+                    className={`todo-checkbox ${isChecked ? 'checked' : ''}`}
+                  >
+                    {isChecked && (
+                      <span className="material-symbols-outlined">check</span>
+                    )}
+                  </button>
+
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                      <span className="dashboard-todo-title body-md" style={{ fontWeight: '600' }}>
+                        {todo.title}
+                      </span>
+                      {getPriorityBadge(todo.priority)}
+                    </div>
+
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginTop: '3px' }}>
+                      {todo.recurrence !== 'one_time' && (
+                        <span className="label-sm" style={{ color: 'var(--primary)', display: 'inline-flex', alignItems: 'center', gap: '2px' }}>
+                          <span className="material-symbols-outlined" style={{ fontSize: '14px' }}>repeat</span>
+                          {todo.recurrence}
+                        </span>
+                      )}
+                      {todo.due_date && (
+                        <span className="label-sm" style={{ color: 'var(--on-surface-variant)' }}>
+                          Due: {todo.due_date}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </section>
+
+      {/* Focus Timer & Journal Quick Cards */}
+      <section style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '16px', marginTop: '8px' }}>
+        {/* Focus Timer Card */}
+        <div className="card" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+          <div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span className="material-symbols-outlined" style={{ color: 'var(--secondary)' }}>timer</span>
+                <h3 className="headline-sm">Focus Timer</h3>
               </div>
-            );
-          })}
+              <span className="badge badge-streak">Deep Flow</span>
+            </div>
+            <p className="body-sm" style={{ color: 'var(--on-surface-variant)' }}>
+              Completed sessions logged naturally today.
+            </p>
+            <div style={{ marginTop: '16px', display: 'flex', alignItems: 'baseline', gap: '10px' }}>
+              <span style={{ fontSize: '32px', fontWeight: '700', color: 'var(--secondary)' }}>
+                {timerStats.total_sessions}
+              </span>
+              <span className="label-md" style={{ color: 'var(--on-surface-variant)' }}>
+                {timerStats.total_sessions === 1 ? 'session' : 'sessions'} ({timerStats.total_minutes}m total)
+              </span>
+            </div>
+          </div>
+          <div style={{ marginTop: '16px' }}>
+            <Link to="/timer" className="btn-secondary" style={{ width: '100%' }}>
+              Start Focus Session
+            </Link>
+          </div>
+        </div>
+
+        {/* Daily Journal Card */}
+        <div className="card" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+          <div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span className="material-symbols-outlined" style={{ color: 'var(--primary)' }}>menu_book</span>
+                <h3 className="headline-sm">Daily Journal</h3>
+              </div>
+              <span className="badge badge-priority-low">Reflection</span>
+            </div>
+            <p className="body-sm" style={{ color: 'var(--on-surface-variant)' }}>
+              Record mindful thoughts, gratitude, and evening notes.
+            </p>
+            <div style={{ marginTop: '16px', color: 'var(--on-surface-variant)', fontSize: '13px' }}>
+              Take a quiet moment to reflect on your daily progress and intentions.
+            </div>
+          </div>
+          <div style={{ marginTop: '16px' }}>
+            <Link to="/journal" className="btn-primary" style={{ width: '100%' }}>
+              Write Today's Entry
+            </Link>
+          </div>
+        </div>
+      </section>
+
+      {/* Floating Action Button for Quick Add */}
+      <button
+        type="button"
+        className="dashboard-fab"
+        aria-label="Quick Add Habit or Task"
+        title="Quick Add Habit or Task"
+        onClick={() => {
+          setModalType('habit');
+          setIsModalOpen(true);
+        }}
+      >
+        <span className="material-symbols-outlined" style={{ fontSize: '28px' }}>add</span>
+      </button>
+
+      {/* Quick Add Modal Dialog */}
+      {isModalOpen && (
+        <div className="modal-overlay" onClick={() => setIsModalOpen(false)}>
+          <div className="modal-dialog" onClick={e => e.stopPropagation()}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <h2 className="headline-sm" style={{ margin: 0 }}>Quick Add</h2>
+              <button
+                type="button"
+                onClick={() => setIsModalOpen(false)}
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  cursor: 'pointer',
+                  color: 'var(--on-surface-variant)',
+                  display: 'flex',
+                  alignItems: 'center'
+                }}
+              >
+                <span className="material-symbols-outlined">close</span>
+              </button>
+            </div>
+
+            {/* Type Switcher Tabs */}
+            <div className="modal-type-tabs">
+              <button
+                type="button"
+                className={`modal-type-tab ${modalType === 'habit' ? 'active' : ''}`}
+                onClick={() => {
+                  setModalType('habit');
+                  setFormError(null);
+                }}
+              >
+                New Habit
+              </button>
+              <button
+                type="button"
+                className={`modal-type-tab ${modalType === 'todo' ? 'active' : ''}`}
+                onClick={() => {
+                  setModalType('todo');
+                  setFormError(null);
+                }}
+              >
+                New Task
+              </button>
+            </div>
+
+            {formError && (
+              <div style={{ padding: '10px 14px', borderRadius: 'var(--radius-md)', backgroundColor: 'var(--error-container)', color: 'var(--on-error-container)', fontSize: '13px' }}>
+                {formError}
+              </div>
+            )}
+
+            <form onSubmit={handleQuickAddSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              {modalType === 'habit' ? (
+                <>
+                  <div>
+                    <label className="label-sm" style={{ display: 'block', marginBottom: '6px', color: 'var(--on-surface-variant)' }}>
+                      Habit Name *
+                    </label>
+                    <input
+                      type="text"
+                      className="form-input"
+                      placeholder="e.g., Morning Meditation, Drink 2L Water"
+                      value={habitForm.name}
+                      onChange={e => setHabitForm({ ...habitForm, name: e.target.value })}
+                      autoFocus
+                    />
+                  </div>
+
+                  <div>
+                    <label className="label-sm" style={{ display: 'block', marginBottom: '6px', color: 'var(--on-surface-variant)' }}>
+                      Target Frequency
+                    </label>
+                    <select
+                      className="form-select"
+                      value={habitForm.target_frequency}
+                      onChange={e => setHabitForm({ ...habitForm, target_frequency: e.target.value })}
+                    >
+                      <option value="daily">Daily</option>
+                      <option value="3x_week">3 times / week</option>
+                      <option value="weekly">Weekly</option>
+                    </select>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div>
+                    <label className="label-sm" style={{ display: 'block', marginBottom: '6px', color: 'var(--on-surface-variant)' }}>
+                      Task Title *
+                    </label>
+                    <input
+                      type="text"
+                      className="form-input"
+                      placeholder="e.g., Pay electricity bill, Review document"
+                      value={todoForm.title}
+                      onChange={e => setTodoForm({ ...todoForm, title: e.target.value })}
+                      autoFocus
+                    />
+                  </div>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                    <div>
+                      <label className="label-sm" style={{ display: 'block', marginBottom: '6px', color: 'var(--on-surface-variant)' }}>
+                        Priority
+                      </label>
+                      <select
+                        className="form-select"
+                        value={todoForm.priority}
+                        onChange={e => setTodoForm({ ...todoForm, priority: e.target.value })}
+                      >
+                        <option value="low">Low</option>
+                        <option value="medium">Medium</option>
+                        <option value="high">High</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="label-sm" style={{ display: 'block', marginBottom: '6px', color: 'var(--on-surface-variant)' }}>
+                        Recurrence
+                      </label>
+                      <select
+                        className="form-select"
+                        value={todoForm.recurrence}
+                        onChange={e => setTodoForm({ ...todoForm, recurrence: e.target.value })}
+                      >
+                        <option value="one_time">One-time</option>
+                        <option value="daily">Daily</option>
+                        <option value="weekly">Weekly</option>
+                        <option value="monthly">Monthly</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="label-sm" style={{ display: 'block', marginBottom: '6px', color: 'var(--on-surface-variant)' }}>
+                      Due Date
+                    </label>
+                    <input
+                      type="date"
+                      className="form-input"
+                      value={todoForm.due_date}
+                      onChange={e => setTodoForm({ ...todoForm, due_date: e.target.value })}
+                    />
+                  </div>
+                </>
+              )}
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '8px' }}>
+                <button
+                  type="button"
+                  className="btn-secondary"
+                  onClick={() => setIsModalOpen(false)}
+                  disabled={formSubmitting}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="btn-primary"
+                  disabled={formSubmitting}
+                >
+                  {formSubmitting ? 'Saving...' : modalType === 'habit' ? 'Create Habit' : 'Create Task'}
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
       )}
-
-      {/* WhatsApp Reminder Modal */}
-      <ReminderModal
-        isOpen={Boolean(reminderStudent)}
-        onClose={() => setReminderStudent(null)}
-        student={reminderStudent}
-        settings={tenantSettings}
-        onReminderSent={() => {
-          loadDashboardData();
-        }}
-      />
-
-      {/* Mark as Paid Confirmation Modal */}
-      <MarkPaidModal
-        isOpen={Boolean(markPaidStudent)}
-        onClose={() => setMarkPaidStudent(null)}
-        student={markPaidStudent}
-        onPaidConfirmed={handlePaidConfirmed}
-      />
-
-      {/* Remind All Overdue Modal (Stitch export design) */}
-      <RemindAllModal
-        isOpen={isRemindAllOpen}
-        onClose={() => setIsRemindAllOpen(false)}
-        overdueStudents={overdueStudents}
-        tenantSettings={tenantSettings}
-        onSuccess={() => {
-          loadDashboardData();
-        }}
-      />
-
-      {/* Bulk Fee Update Modal */}
-      <BulkFeeUpdateModal
-        isOpen={isBulkUpdateOpen}
-        onClose={() => setIsBulkUpdateOpen(false)}
-        students={students}
-        onSuccess={(msg) => {
-          setUndoToast({
-            message: msg || 'Bulk fee update applied successfully.',
-            type: 'success',
-          });
-          loadDashboardData();
-        }}
-      />
-
-      {/* CSV Import Modal */}
-      <CsvImportModal
-        isOpen={isCsvImportOpen}
-        onClose={() => setIsCsvImportOpen(false)}
-        onSuccess={(count) => {
-          setUndoToast({
-            message: `Successfully imported ${count} student${count === 1 ? '' : 's'} from CSV.`,
-            type: 'success',
-          });
-          loadDashboardData();
-        }}
-      />
-
-      {/* Floating Undo Toast */}
-
-      <UndoToast
-        toast={undoToast}
-        onUndo={handleUndo}
-        onDismiss={() => setUndoToast(null)}
-      />
-
-      {/* Fixed Bottom Navigation Bar */}
-      <BottomNav active="dashboard" />
     </div>
   );
 }

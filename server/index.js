@@ -3,59 +3,62 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import express from 'express';
 import cors from 'cors';
-import bcrypt from 'bcryptjs';
-import { v4 as uuidv4 } from 'uuid';
-import { initDb, getDb } from './lib/db.js';
-import routes from './routes/index.js';
-import { runSeed } from './scripts/seed.js';
+import cookieParser from 'cookie-parser';
+import { initDb, query } from './lib/db.js';
+import authRouter from './routes/auth.js';
+import habitsRouter from './routes/habits.js';
+import todosRouter from './routes/todos.js';
+import timerRouter from './routes/timer.js';
+import journalRouter from './routes/journal.js';
+import leaderboardRouter from './routes/leaderboard.js';
+import adminRouter from './routes/admin.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Load .env from root or server directory
 dotenv.config({ path: path.resolve(__dirname, '../.env') });
-dotenv.config({ path: path.resolve(__dirname, './.env') });
 dotenv.config();
-
-// Ensure JWT_SECRET is always present with a secure fallback for zero-config cloud deployments
-if (!process.env.JWT_SECRET || process.env.JWT_SECRET.trim() === '') {
-  process.env.JWT_SECRET = 'feereminder_prod_secret_fe183cea2347721919a7249f1baeccc6b030dcada74420ea';
-}
-
-// Initialize the database (creates tables on first run)
-await initDb();
-
-// Auto-seed demo admin and 50 dummy students if brand new database
-try {
-  const db = getDb();
-  const studentCount = db.prepare('SELECT COUNT(*) as count FROM students').get()?.count || 0;
-  if (studentCount === 0) {
-    console.log('🔄 Initializing database with 50 demo students & fee records...');
-    await runSeed();
-    console.log('✅ Auto-seeded 50 demo students for Apex Coaching Academy.');
-  }
-} catch (e) {
-  console.warn('Initial seed notice:', e.message);
-}
 
 const app = express();
 const PORT = process.env.PORT || 3001;
 
-// Middleware
-app.use(cors());
+app.use(cors({
+  origin: true,
+  credentials: true
+}));
 app.use(express.json());
+app.use(cookieParser(process.env.SESSION_SECRET || 'habittrack-dev-secret'));
 
-// Mount all API routes
-app.use('/api', routes);
+// Mount API routers
+app.use('/api/auth', authRouter);
+app.use('/api/habits', habitsRouter);
+app.use('/api/todos', todosRouter);
+app.use('/api/timer', timerRouter);
+app.use('/api/journal', journalRouter);
+app.use('/api/leaderboard', leaderboardRouter);
+app.use('/api/admin', adminRouter);
 
-// Health check
-app.get('/api/health', (_req, res) => {
-  res.json({ status: 'ok' });
+// Health check endpoint
+app.get('/api/health', async (_req, res) => {
+  try {
+    const dbRes = await query('SELECT NOW() as now;');
+    res.json({
+      status: 'ok',
+      app: 'HabitTrack',
+      database: 'connected',
+      timestamp: dbRes.rows[0].now
+    });
+  } catch (err) {
+    res.status(500).json({
+      status: 'error',
+      database: 'disconnected',
+      error: err.message
+    });
+  }
 });
 
-// Serve static frontend files when built (for production unified deployment)
+// Serve static frontend files when built
 const clientDistPath = path.join(__dirname, '../client/dist');
-
 app.use(express.static(clientDistPath));
 
 app.get('*', (req, res, next) => {
@@ -64,12 +67,21 @@ app.get('*', (req, res, next) => {
   }
   res.sendFile(path.join(clientDistPath, 'index.html'), (err) => {
     if (err) {
-      // In dev mode when client/dist isn't built yet, return friendly message
-      res.status(200).send('FeeReminder API Server is running. In dev mode, access the React UI on port 5173.');
+      res.status(200).send('HabitTrack API Server is running. In dev mode, access the React UI on port 5173.');
     }
   });
 });
 
-app.listen(PORT, () => {
-  console.log(`Server running on http://localhost:${PORT}`);
-});
+if (!process.env.VERCEL) {
+  try {
+    await initDb();
+    app.listen(PORT, () => {
+      console.log(`HabitTrack server running on http://localhost:${PORT}`);
+    });
+  } catch (err) {
+    console.error('Failed to initialize database:', err);
+    process.exit(1);
+  }
+}
+
+export default app;

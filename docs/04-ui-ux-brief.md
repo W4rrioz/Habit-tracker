@@ -1,74 +1,84 @@
 # UI/UX Design Brief
 
 ## 1. Experience Goal
-- Desired feeling: Calm, trustworthy, effortless — like a to-do list, not like accounting software.
-- Three visual adjectives: Clear, sturdy, unfussy.
-- What the design must avoid: Dense data tables, small tap targets, jargon, anything that resembles a "complex ERP" (the exact thing this product is positioned against).
+- Desired feeling: Calm, clean, and satisfying to check things off in — encouraging, never guilt-inducing.
+- Three visual adjectives: Soft, rounded, airy.
+- What the design must avoid: Clutter, harsh alarm colors (especially red for missed items), anything that feels corporate/clinical, sharp/angular shapes.
 
 ## 2. Users and Context
-- Primary user: Non-technical school/coaching institute admin, likely 30s–50s, moderate smartphone fluency.
-- Device and environment: Cheap Android phones, small screens, often outdoors or in a busy office, on inconsistent mobile data.
-- Accessibility needs: Large, forgiving tap targets; high contrast for outdoor/bright-light visibility; minimal text density; no reliance on hover states (touch-only).
+- Primary user: The builder and a small circle of friends/classmates, checking in throughout the day, often on a phone browser.
+- Device and environment: Mobile browser primarily, desktop secondarily.
+- Accessibility needs: Sufficient contrast on the light blue/cyan palette; large enough tap targets for daily-use actions (check-ins, timer controls).
 
 ## 3. Visual Direction
-- Colour palette and roles:
-  - Primary (brand/action): Deep blue `#1E4FCB` — used for primary buttons, active states, links.
-  - Success (paid): Green `#1E8E3E` — status badges, confirmations, "Mark as Paid" button.
-  - Warning (due soon): Amber `#B7791F` — status badges.
-  - Danger (overdue): Red `#C53030` — status badges, blocking errors.
-  - Neutral background: Off-white `#F7F8FA`.
-  - Neutral text: Near-black `#1A1A1A` for primary text, `#5B6270` for secondary text.
-- Typography: A single clean system/sans-serif font stack (e.g. system-ui) for fast loading and native feel — avoid custom web fonts that slow loading on weak connections. Sizes: base 16px body text (never smaller, for readability); headings stepped at 20/24/28px.
-- Icon direction: Simple line icons (not filled/decorative), used sparingly — an icon should clarify, not decorate.
-- Image or illustration direction: Minimal to none in v1 — avoid anything that adds load weight without functional value.
-- Surface and border treatment: Flat cards with a subtle 1px border or soft shadow for separation — avoid heavy shadows, gradients, or glassmorphism; this needs to render cleanly and fast on low-end devices.
+- Color palette and roles: Background: very light blue-white (#F0F9FF). Primary accent (buttons, active states, "completed"): cyan/light blue (#22D3EE or #38BDF8). Secondary accent (success/streak highlights): soft teal/mint (#5EEAD4). Priority colors kept soft/muted (e.g. muted coral for high, soft amber for medium, soft blue for low) — never harsh alarm red. Text: dark slate (#1E293B), not pure black, to stay soft.
+- Typography: Rounded-letterform sans-serif (e.g. "Inter," "Poppins," or "Nunito") throughout — headers slightly bolder, body text regular weight.
+- Icon direction: Minimal, simple line or soft-filled icons only where they add clarity (checkmarks, streak flame, timer icon) — no decorative icon clutter.
+- Image or illustration direction: None needed — this is a utility app; keep focus on data and interaction, not decoration.
+- Surface and border treatment: Rounded cards (16-20px radius) with soft, subtle shadows or thin borders — no glassmorphism, no heavy drop shadows.
 
 ## 4. Layout System
-- Content width: Single-column, full-width on mobile (primary target); centered max-width ~600px on larger/desktop viewports.
-- Grid: Simple vertical stack of cards/list items — no multi-column complexity in v1.
-- Spacing scale: 4px base unit (4/8/12/16/24/32) for consistent rhythm.
-- Section rhythm: Generous vertical spacing between cards (at least 12–16px) so tap targets don't feel cramped.
-- Responsive breakpoints: Mobile-first (<600px) as the primary design target; a simple centered layout above that — no dedicated tablet/desktop redesign needed for v1.
+- Content width: Mobile-first, single column; centers to a comfortable max-width (~500-600px) on desktop rather than stretching full-width.
+- Grid: Vertical stacks of rounded cards on most screens; a simple table on Admin Panel; a 7-column grid for the habit history view.
+- Spacing scale: 4px base unit (4/8/16/24/32).
+- Section rhythm: Persistent nav -> page header -> primary content cards -> (where relevant) a floating "+" action button.
+- Responsive breakpoints: One primary breakpoint (~768px) — mobile shows stacked single-column content and a bottom/hamburger nav; desktop shows the same content centered with a top or side nav.
 
 ## 5. Component Language
-- Buttons: Full-width or large on mobile, high-contrast fill for primary actions (e.g. "Remind", "Mark as Paid"), min 44px tap height. States: default, pressed, disabled (e.g. no valid phone number, or payment info not set), loading (spinner replaces label).
-- Inputs: Large text fields with visible labels above (not placeholder-only, for clarity), clear inline error text below in red. States: default, focus (blue outline), error, disabled.
-- Navigation: Simple bottom or top bar, up to 4 items (Dashboard, Add Student, Settings, Sign Out/Profile).
-- Cards: Used for student list items on the Dashboard — name, amount, due date, status badge, and both "Remind" and "Mark as Paid" quick-actions in one glanceable block.
-- Modals or sheets: Lightweight confirmation sheets for both "Remind" ("Send ₹X reminder to [Parent]?") and "Mark as Paid" ("Mark [Student]'s fee as paid?") — bottom sheet style fits mobile better than a centered modal. Mark-as-Paid confirmation includes a brief "you can undo this" note.
-- Tables or lists: Avoid literal data tables; use card-style list items even for what would traditionally be tabular data — better for small screens and non-technical users.
-- Feedback and status components: Status badges (Paid/Due Soon/Overdue) using the color system above; toast/snackbar for save confirmations, errors, and a brief "Undo" toast after marking paid.
+
+### Buttons
+- Primary: large, pill-shaped (fully rounded), solid cyan fill, white text.
+- Secondary: pill-shaped, outlined or text-only, muted grey/blue.
+- States: default, hover (slightly darker fill), focus (visible ring), disabled (reduced opacity), loading (label changes to an in-progress phrase, e.g. "Saving...").
+
+### Inputs
+- Rounded pill or soft-rounded rectangle text fields, light border, cyan focus ring.
+- Error state: soft red-tinted border and a small inline message below the field (muted, not alarming).
+
+### Cards
+- Rounded (16-20px radius), light background slightly lifted from the page background, generous internal padding.
+
+### Checkboxes / Toggles
+- Large, rounded/circular tap targets; fills with cyan/teal when checked, with a brief satisfying transition.
+
+### Priority dots / badges
+- Small rounded pills or dots, using the soft priority color palette (coral/amber/blue), always paired with text where priority matters (not color alone).
+
+### Charts
+- Pie charts: cyan/teal for "completed," light grey for "missed" — soft, no harsh outlines.
+- Line/bar charts: single cyan/teal line or bars, rounded bar tops, minimal gridlines.
+
+### Nav bar
+- Persistent, rounded icons/labels for Dashboard, Habits, Todos, Timer, Journal, Leaderboard, (Admin if applicable), Logout — consistent placement across all logged-in screens.
 
 ## 6. Screen Direction
-- Institute Settings: Simple one-time (or rarely revisited) form — UPI ID field prominent, since reminders are blocked without it; a short one-line explanation of why it's needed.
-- Dashboard: Status badge and amount are the visual anchor of each card — the admin should be able to scan urgency without reading full sentences. Both "Remind" and "Mark as Paid" actions are always visible, not hidden behind a menu.
-- Add/Edit Student: Straightforward top-to-bottom form, one field per row, large touch targets, phone number field visually emphasized since it's critical to the product working.
-- Student Detail: Status and next action (Remind or Mark as Paid, depending on current status) near the top; history further down, secondary to the current state.
-- Send Reminder / Mark as Paid confirmations: Minimal, single clear question and two large buttons (Confirm / Cancel) — no room for accidental taps.
+(See `08-ui-page-prompts.md` for full per-screen generation prompts — this section summarizes the shared direction those prompts follow.)
+- Login / Create Account: centered minimal card, no distractions.
+- Dashboard: the most information-dense screen, but organized into clearly separated rounded sections (habits, todos, leftovers) so it doesn't feel cluttered.
+- Habit Detail: streak numbers most prominent (top), history grid and charts below.
+- Timer: the most stripped-down screen — large countdown ring, minimal surrounding UI.
+- Admin Panel: same rounded/light-blue language, but slightly more "data table" in feel — the one screen allowed to look a bit more utilitarian.
 
 ## 7. Interaction and Motion
-- Purposeful transitions: Simple fade/slide for screen transitions — nothing elaborate; motion should never delay perceived responsiveness on a slow device.
-- Feedback moments: Button loading spinners for any save action; success toast after saving, sending a reminder, or marking paid (with Undo affordance on the latter).
-- Reduced-motion behaviour: Respect `prefers-reduced-motion` — fall back to instant state changes, no animation dependency for understanding the UI.
+- Purposeful transitions: A satisfying brief animation (scale/fade) when checking off a habit or todo — this is the core "reward" moment throughout the app.
+- Feedback moments: Streak numbers ticking up; a small positive animation at milestone streaks (7, 30, 100 days) as a nice touch; the timer's countdown ring filling/draining smoothly.
+- Reduced-motion behavior: Respect `prefers-reduced-motion`, falling back to instant state changes.
 
 ## 8. Accessibility
-- Contrast: All text/background pairs meet WCAG AA contrast minimums, particularly given outdoor/bright-light usage.
-- Keyboard use: Not a primary concern (touch-first), but forms should remain usable via keyboard for any desktop fallback use.
-- Focus states: Visible focus outline on all interactive elements.
-- Tap targets: Minimum 44x44px for all buttons/interactive elements.
-- Text sizing: Body text never below 16px; respects system font-size settings where possible.
+- Contrast: Verify all text and the cyan accent meet WCAG AA against the light backgrounds used throughout.
+- Keyboard use: All buttons, toggles, and form fields reachable and operable via keyboard.
+- Focus states: Visible cyan focus ring on all interactive elements.
+- Tap targets: Minimum 44x44px for check-in toggles and timer controls (the most-used actions).
+- Text sizing: Base 16px minimum for body text; larger for streak numbers and the timer countdown.
 
 ## 9. Consistency Rules
 
 ### Always use
-- Card-based layout for lists of students/dues
-- The defined status-color system (green/amber/red) consistently for Paid/Due Soon/Overdue
-- Full-width, high-contrast primary buttons for the main action on any screen
-- Plain, non-technical language in labels and messages (e.g. "Remind" and "Mark as Paid", not "Trigger Notification" or "Update Payment Status")
-- A confirmation step before any state-changing action (Remind, Mark as Paid)
+- The same cyan/teal accent for every "completed" or "positive" state across habits, todos, charts, and streaks
+- Rounded shapes everywhere — no sharp corners on any interactive element
+- Text labels alongside any color-coded status (priority, leftover, missed)
 
 ### Never use
-- Dense multi-column data tables
-- Small/low-contrast text for anything status-related
-- Decorative gradients, glassmorphism, or heavy shadows
-- Jargon or technical error messages exposed to the admin (translate any backend error into plain language)
+- Harsh red/alarm styling for missed or incomplete items
+- Sharp-cornered cards, buttons, or inputs
+- Color as the sole indicator of state

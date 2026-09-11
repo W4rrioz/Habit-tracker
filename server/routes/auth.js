@@ -1,183 +1,146 @@
-import { Router } from 'express';
+import express from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
-import { v4 as uuidv4 } from 'uuid';
-import { getDb } from '../lib/db.js';
+import { query } from '../lib/db.js';
 import { requireAuth } from '../middleware/auth.js';
 
-const router = Router();
-const getJwtSecret = () => process.env.JWT_SECRET || 'feereminder_prod_secret_fe183cea2347721919a7249f1baeccc6b030dcada74420ea';
-const BCRYPT_ROUNDS = 10;
+const router = express.Router();
 
-// Token expires in 7 days — long enough for a pilot, short enough to be reasonable
-const TOKEN_EXPIRY = '7d';
+function createSessionToken(user) {
+  const secret = process.env.SESSION_SECRET || 'habittrack-dev-secret';
+  return jwt.sign(
+    { userId: user.id, username: user.username, isAdmin: user.is_admin },
+    secret,
+    { expiresIn: '7d' }
+  );
+}
 
-/**
- * POST /api/auth/signup
- * Create a new institute (tenant) + admin account.
- * Returns a JWT token and admin/tenant info.
- */
+function setSessionCookie(res, token) {
+  res.cookie('habittrack_session', token, {
+    httpOnly: true,
+    signed: true,
+    maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+    sameSite: 'lax',
+    secure: process.env.NODE_ENV === 'production'
+  });
+}
+
+// POST /api/auth/signup
 router.post('/signup', async (req, res) => {
   try {
-    const { instituteName, email, password } = req.body;
+    const { username, password } = req.body;
 
-    // --- Server-side validation ---
-    const errors = {};
-    if (!instituteName?.trim()) errors.instituteName = 'Institute name is required.';
-    if (!email?.trim()) {
-      errors.email = 'Email is required.';
-    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      errors.email = 'Please enter a valid email address.';
-    }
-    if (!password) {
-      errors.password = 'Password is required.';
-    } else if (password.length < 6) {
-      errors.password = 'Password must be at least 6 characters.';
+    if (!username || typeof username !== 'string') {
+      return res.status(400).json({ error: 'Username is required.' });
     }
 
-    if (Object.keys(errors).length > 0) {
-      return res.status(400).json({ error: 'Validation failed.', errors });
+    const trimmedUsername = username.trim();
+    if (trimmedUsername.length < 3 || trimmedUsername.length > 30) {
+      return res.status(400).json({ error: 'Username must be between 3 and 30 characters.' });
     }
 
-    const db = getDb();
-    const trimmedEmail = email.trim().toLowerCase();
-
-    // Check for duplicate email
-    const existing = db.prepare('SELECT id FROM admins WHERE email = ?').get(trimmedEmail);
-    if (existing) {
-      return res.status(409).json({
-        error: 'An account with this email already exists. Try signing in instead.',
-      });
+    if (/\s/.test(trimmedUsername)) {
+      return res.status(400).json({ error: 'Username must not contain spaces.' });
     }
 
-    // Hash the password — never store plain text
-    const passwordHash = await bcrypt.hash(password, BCRYPT_ROUNDS);
+    if (!password || typeof password !== 'string' || password.length < 6) {
+      return res.status(400).json({ error: 'Password must be at least 6 characters long.' });
+    }
 
-    // Create tenant + admin in a transaction (atomic)
-    const tenantId = uuidv4();
-    const adminId = uuidv4();
+    const existing = await query('SELECT id FROM users WHERE LOWER(username) = LOWER($1)', [trimmedUsername]);
+    if (existing.rows.length > 0) {
+      return res.status(409).json({ error: 'Username is already taken.' });
+    }
 
-    const insertTenant = db.prepare(
-      'INSERT INTO tenants (id, name) VALUES (?, ?)'
-    );
-    const insertAdmin = db.prepare(
-      'INSERT INTO admins (id, tenant_id, email, password_hash) VALUES (?, ?, ?, ?)'
+    // Hash password
+    const passwordHash = await bcrypt.hash(password, 10);
+
+    // If first user, make admin
+    const countRes = await query('SELECT COUNT(*) as count FROM users');
+    const isFirstUser = parseInt(countRes.rows[0].count, 10) === 0;
+
+    const insertRes = await query(
+      `INSERT INTO users (username, password_hash, is_admin)
+       VALUES ($1, $2, $3)
+       RETURNING id, username, is_admin, created_at`,
+      [trimmedUsername, passwordHash, isFirstUser]
     );
 
-    const createAccount = db.transaction(() => {
-      insertTenant.run(tenantId, instituteName.trim());
-      insertAdmin.run(adminId, tenantId, trimmedEmail, passwordHash);
-    });
-
-    createAccount();
-
-    // Sign a JWT
-    const token = jwt.sign({ adminId }, getJwtSecret(), { expiresIn: TOKEN_EXPIRY });
+    const newUser = insertRes.rows[0];
+    const token = createSessionToken(newUser);
+    setSessionCookie(res, token);
 
     res.status(201).json({
-      token,
-      admin: {
-        id: adminId,
-        email: trimmedEmail,
-        tenant_id: tenantId,
-        tenant_name: instituteName.trim(),
+      user: {
+        id: newUser.id,
+        username: newUser.username,
+        is_admin: newUser.is_admin
       },
+      token
     });
   } catch (err) {
-    console.error('POST /api/auth/signup error:', err);
-    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+    console.error('Signup error:', err);
+    res.status(500).json({ error: 'Internal server error during signup.' });
   }
 });
 
-/**
- * POST /api/auth/signin
- * Authenticate an existing admin.
- * Returns a JWT token and admin/tenant info.
- */
-router.post('/signin', async (req, res) => {
+// POST /api/auth/login
+router.post('/login', async (req, res) => {
   try {
-    const { email, password } = req.body;
+    const { username, password } = req.body;
 
-    // Basic validation
-    if (!email?.trim() || !password) {
-      return res.status(400).json({ error: 'Email and password are required.' });
+    if (!username || !password) {
+      return res.status(400).json({ error: 'Username and password are required.' });
     }
 
-    const db = getDb();
-    const trimmedEmail = email.trim().toLowerCase();
+    const trimmedUsername = username.trim();
+    const userRes = await query(
+      'SELECT id, username, password_hash, is_admin FROM users WHERE LOWER(username) = LOWER($1)',
+      [trimmedUsername]
+    );
 
-    // Look up admin by email (joined with tenant for the name)
-    let admin = db.prepare(`
-      SELECT a.id, a.tenant_id, a.email, a.password_hash, t.name AS tenant_name
-      FROM admins a
-      JOIN tenants t ON a.tenant_id = t.id
-      WHERE a.email = ?
-    `).get(trimmedEmail);
-
-    if (!admin && trimmedEmail === 'admin') {
-      admin = db.prepare(`
-        SELECT a.id, a.tenant_id, a.email, a.password_hash, t.name AS tenant_name
-        FROM admins a
-        JOIN tenants t ON a.tenant_id = t.id
-        WHERE a.email IN ('admin', 'admin@feereminder.local', 'admin@apex.com')
-        LIMIT 1
-      `).get();
+    if (userRes.rows.length === 0) {
+      return res.status(401).json({ error: 'Invalid username or password.' });
     }
 
-    if (!admin) {
-      return res.status(401).json({ error: 'Invalid email or password.' });
+    const user = userRes.rows[0];
+    const passwordValid = await bcrypt.compare(password, user.password_hash);
+    if (!passwordValid) {
+      return res.status(401).json({ error: 'Invalid username or password.' });
     }
 
-    // Compare password hash
-    const match = await bcrypt.compare(password, admin.password_hash);
-    if (!match) {
-      return res.status(401).json({ error: 'Invalid email or password.' });
-    }
-
-    // Sign a JWT
-    const token = jwt.sign({ adminId: admin.id }, getJwtSecret(), { expiresIn: TOKEN_EXPIRY });
+    const token = createSessionToken(user);
+    setSessionCookie(res, token);
 
     res.json({
-      token,
-      admin: {
-        id: admin.id,
-        email: admin.email,
-        tenant_id: admin.tenant_id,
-        tenant_name: admin.tenant_name,
+      user: {
+        id: user.id,
+        username: user.username,
+        is_admin: user.is_admin
       },
+      token
     });
   } catch (err) {
-    console.error('POST /api/auth/signin error:', err);
-    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+    console.error('Login error:', err);
+    res.status(500).json({ error: 'Internal server error during login.' });
   }
 });
 
-/**
- * GET /api/auth/me
- * Returns the authenticated admin's info and their tenant details.
- * Protected by requireAuth middleware — tenant_id resolved server-side.
- */
+// POST /api/auth/logout
+router.post('/logout', (req, res) => {
+  res.clearCookie('habittrack_session');
+  res.json({ success: true, message: 'Logged out successfully.' });
+});
+
+// GET /api/auth/me
 router.get('/me', requireAuth, (req, res) => {
-  try {
-    const db = getDb();
-    const tenant = db.prepare('SELECT id, name FROM tenants WHERE id = ?').get(req.tenantId);
-
-    if (!tenant) {
-      return res.status(500).json({ error: 'Could not load tenant info.' });
+  res.json({
+    user: {
+      id: req.user.id,
+      username: req.user.username,
+      is_admin: req.user.is_admin
     }
-
-    res.json({
-      admin: {
-        id: req.adminId,
-        email: req.adminEmail,
-        tenant_id: tenant.id,
-        tenant_name: tenant.name,
-      },
-    });
-  } catch (err) {
-    console.error('GET /api/auth/me error:', err);
-    res.status(500).json({ error: 'Internal server error.' });
-  }
+  });
 });
 
 export default router;

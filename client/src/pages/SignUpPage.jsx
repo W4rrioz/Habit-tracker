@@ -1,227 +1,145 @@
-import { useState } from 'react';
+import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import ThemeToggle from '../components/ThemeToggle';
 
-/**
- * Sign Up screen — Ledger Calm design per mockups:
- *  - Route: /signup
- *  - Academy hero illustration
- *  - Inputs with Material Symbol icons (school, mail, key)
- *  - Password visibility toggle
- */
-export default function SignUpPage() {
-  const { signUp } = useAuth();
-  const navigate = useNavigate();
-
-  const [instituteName, setInstituteName] = useState('');
-  const [email, setEmail] = useState('');
+export default function SignupPage() {
+  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const [errors, setErrors] = useState({});
-  const [serverError, setServerError] = useState('');
 
-  function validate() {
-    const errs = {};
-    if (!instituteName.trim()) errs.instituteName = 'Institute name is required.';
-    if (!email.trim()) {
-      errs.email = 'Email is required.';
-    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      errs.email = 'Please enter a valid email address.';
-    }
-    if (!password) {
-      errs.password = 'Password is required.';
-    } else if (password.length < 6) {
-      errs.password = 'Password must be at least 6 characters.';
-    }
-    return errs;
-  }
+  const { signup } = useAuth();
+  const navigate = useNavigate();
 
   async function handleSubmit(e) {
     e.preventDefault();
-    setServerError('');
+    setError('');
 
-    const errs = validate();
-    setErrors(errs);
-    if (Object.keys(errs).length > 0) return;
+    const trimmed = username.trim();
+    if (!trimmed) {
+      setError('Please enter a username.');
+      return;
+    }
+    if (trimmed.length < 3 || trimmed.length > 30) {
+      setError('Username must be between 3 and 30 characters.');
+      return;
+    }
+    if (/\s/.test(trimmed)) {
+      setError('Username cannot contain spaces.');
+      return;
+    }
+    if (password.length < 6) {
+      setError('Password must be at least 6 characters long.');
+      return;
+    }
+    if (password !== confirmPassword) {
+      setError('Passwords do not match.');
+      return;
+    }
 
     setLoading(true);
     try {
-      const { error } = await signUp({
-        email: email.trim(),
-        password,
-        instituteName: instituteName.trim(),
-      });
-
-      if (error) {
-        if (error.errors) {
-          setErrors(error.errors);
-        }
-        setServerError(error.error || 'Something went wrong. Please try again.');
-      } else {
-        navigate('/dashboard', { replace: true });
-      }
-    } catch {
-      setServerError('Something went wrong. Please try again.');
+      await signup(trimmed, password);
+      navigate('/');
+    } catch (err) {
+      setError(err.message || 'Failed to create account.');
     } finally {
       setLoading(false);
     }
   }
 
   return (
-    <div className="auth-page">
-      <div className="auth-card card">
-        {/* Dark Theme Toggle */}
-        <div style={{ display: 'flex', justifyContent: 'flex-end', width: '100%', marginBottom: 'var(--space-2)' }}>
-          <ThemeToggle />
-        </div>
+    <div style={{ maxWidth: '420px', margin: '40px auto' }}>
+      <div className="card">
+        <h1 className="headline-lg" style={{ marginBottom: '8px' }}>Create Account</h1>
+        <p className="body-md" style={{ color: 'var(--on-surface-variant)', marginBottom: '24px' }}>
+          Start building your habits and streaks today.
+        </p>
 
-        {/* Header Illustration */}
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', marginBottom: 'var(--space-4)' }}>
-          <div
-            style={{
-              width: '64px',
-              height: '64px',
-              borderRadius: 'var(--radius-full)',
-              backgroundColor: 'var(--color-primary-fixed)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              marginBottom: 'var(--space-3)',
-            }}
-          >
-            <span className="material-symbols-outlined" style={{ fontSize: '32px', color: 'var(--color-primary)' }}>
-              school
-            </span>
+        {error && (
+          <div style={{
+            padding: '12px',
+            backgroundColor: 'var(--error-container)',
+            color: 'var(--on-error-container)',
+            borderRadius: 'var(--radius-md)',
+            fontSize: '13px',
+            fontWeight: '500',
+            marginBottom: '16px'
+          }}>
+            {error}
           </div>
-          <h1>Create Account</h1>
-          <p className="subtitle">Set up your institute in under a minute.</p>
-        </div>
-
-        {serverError && (
-          <div className="alert alert-error">{serverError}</div>
         )}
 
-        <form onSubmit={handleSubmit} noValidate>
-          {/* Institute Name */}
-          <div className="form-group">
-            <label className="form-label" htmlFor="instituteName">
-              <span>Institute Name</span>
-              <span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-on-surface-variant)', fontWeight: 400 }}>Required</span>
-            </label>
-            <div className="input-with-icon">
-              <span className="material-symbols-outlined input-icon-prefix">school</span>
-              <input
-                id="instituteName"
-                className={`form-input has-icon ${errors.instituteName ? 'error' : ''}`}
-                type="text"
-                placeholder="e.g. Sharma Coaching Centre"
-                value={instituteName}
-                onChange={(e) => setInstituteName(e.target.value)}
-                disabled={loading}
-                autoComplete="organization"
-              />
-            </div>
-            {errors.instituteName && (
-              <span className="form-error">{errors.instituteName}</span>
-            )}
+        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          <div>
+            <label className="label-md" style={{ display: 'block', marginBottom: '6px' }}>Username</label>
+            <input
+              type="text"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              placeholder="Choose a unique username"
+              required
+              style={{
+                width: '100%',
+                padding: '12px',
+                borderRadius: 'var(--radius-md)',
+                border: '1px solid var(--outline-variant)',
+                backgroundColor: 'var(--surface-container-low)'
+              }}
+            />
           </div>
 
-          {/* Email */}
-          <div className="form-group">
-            <label className="form-label" htmlFor="email">
-              <span>Email address</span>
-              <span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-on-surface-variant)', fontWeight: 400 }}>Required</span>
-            </label>
-            <div className="input-with-icon">
-              <span className="material-symbols-outlined input-icon-prefix">mail</span>
-              <input
-                id="email"
-                className={`form-input has-icon ${errors.email ? 'error' : ''}`}
-                type="email"
-                placeholder="you@example.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                disabled={loading}
-                autoComplete="email"
-              />
-            </div>
-            {errors.email && (
-              <span className="form-error">{errors.email}</span>
-            )}
+          <div>
+            <label className="label-md" style={{ display: 'block', marginBottom: '6px' }}>Password</label>
+            <input
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="••••••••"
+              required
+              style={{
+                width: '100%',
+                padding: '12px',
+                borderRadius: 'var(--radius-md)',
+                border: '1px solid var(--outline-variant)',
+                backgroundColor: 'var(--surface-container-low)'
+              }}
+            />
           </div>
 
-          {/* Password */}
-          <div className="form-group">
-            <label className="form-label" htmlFor="password">
-              <span>Password</span>
-            </label>
-            <div className="input-with-icon">
-              <span className="material-symbols-outlined input-icon-prefix">key</span>
-              <input
-                id="password"
-                className={`form-input has-icon ${errors.password ? 'error' : ''}`}
-                type={showPassword ? 'text' : 'password'}
-                placeholder="At least 6 characters"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                disabled={loading}
-                autoComplete="new-password"
-                style={{ paddingRight: '44px' }}
-              />
-              <button
-                type="button"
-                onClick={() => setShowPassword(!showPassword)}
-                aria-label="Toggle password visibility"
-                style={{
-                  position: 'absolute',
-                  right: '6px',
-                  background: 'none',
-                  border: 'none',
-                  cursor: 'pointer',
-                  color: 'var(--color-on-surface-variant)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  width: '36px',
-                  height: '36px',
-                }}
-              >
-                <span className="material-symbols-outlined" style={{ fontSize: '20px' }}>
-                  {showPassword ? 'visibility_off' : 'visibility'}
-                </span>
-              </button>
-            </div>
-            {errors.password && (
-              <span className="form-error">{errors.password}</span>
-            )}
+          <div>
+            <label className="label-md" style={{ display: 'block', marginBottom: '6px' }}>Confirm Password</label>
+            <input
+              type="password"
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              placeholder="••••••••"
+              required
+              style={{
+                width: '100%',
+                padding: '12px',
+                borderRadius: 'var(--radius-md)',
+                border: '1px solid var(--outline-variant)',
+                backgroundColor: 'var(--surface-container-low)'
+              }}
+            />
           </div>
 
           <button
             type="submit"
-            className="btn btn-primary"
+            className="btn-primary"
             disabled={loading}
-            style={{ marginTop: 'var(--space-2)' }}
+            style={{ marginTop: '8px', padding: '12px', opacity: loading ? 0.7 : 1 }}
           >
-            {loading ? (
-              <span className="spinner" />
-            ) : (
-              <>
-                <span>Create Account</span>
-                <span className="material-symbols-outlined" style={{ fontSize: '20px' }}>
-                  arrow_forward
-                </span>
-              </>
-            )}
+            {loading ? 'Creating account...' : 'Create Account'}
           </button>
-        </form>
 
-        <p className="auth-footer">
-          Already have an account? <Link to="/login" style={{ fontWeight: 600, color: 'var(--color-primary-container)' }}>Sign In</Link>
-        </p>
+          <p className="body-sm" style={{ textAlign: 'center', marginTop: '12px', color: 'var(--on-surface-variant)' }}>
+            Already have an account? <Link to="/login" style={{ color: 'var(--primary)', fontWeight: '600' }}>Sign In</Link>
+          </p>
+        </form>
       </div>
     </div>
   );
 }
-

@@ -1,113 +1,114 @@
 # Backend Schema
 
 ## 1. Data Overview
-- Database type: SQLite (local file-based relational database).
-- Main data domains: Tenants (institutes), Admins, Students, Fees/Dues, Reminders. (A `payments` table is deferred to v2 — see Section 10.)
-- Ownership model: Every table except `tenants` itself carries a `tenant_id` foreign key; all queries are scoped by the authenticated admin's tenant.
+- Database type: Supabase (hosted Postgres, free tier).
+- Main data domains: Users (auth + profile), Habits + Checkins, Todos + recurrence/leftover tracking, Journal entries, Focus-timer sessions.
+- Ownership model: Every table except `users` itself has a `user_id` foreign key; all queries are scoped to the logged-in user's own data except the leaderboard (which reads aggregated streak values across users) and the admin panel (which reads across all users, admin-only).
 
-## 2. Authentication and Authorisation
-- User identity: `admins` table, one row per institute admin, linked to a `tenant_id`.
-- Sign-in methods: Email/password, implemented directly against the SQLite database (no external auth provider); passwords stored as salted hashes, never in plain text.
-- Roles: Single role in v1 — `admin` (full access within their own tenant only).
-- Permissions: Admin can fully manage students, fees, and reminders within their own tenant; no access to other tenants under any condition.
-- Session handling: Standard session/JWT issued by auth provider, validated on every backend request; `tenant_id` derived server-side from the authenticated admin, never trusted from client input.
+## 2. Authentication and Authorization
+- User identity: `users` table, custom (not Supabase Auth).
+- Sign-in methods: Username + password only.
+- Roles: `is_admin` boolean flag on the `users` table (no separate roles table needed at this scale).
+- Permissions: Every non-auth endpoint requires a valid session; data-modifying endpoints additionally check that the resource's `user_id` matches the session's user; admin endpoints additionally check `is_admin = true`.
+- Session handling: Signed session token issued on login/signup, stored in an HTTP-only cookie; validated on every request.
 
-## 3. Tables or Collections
+## 3. Tables
 
-### Table: tenants
-- Purpose: Represents one institute (school/coaching center) using the app, including its payment info shown in reminders.
-| Column | Type | Required | Default | Validation | Unique | Notes |
-|---|---|---|---|---|---|---|
-| id | uuid | yes | generated | — | PK | |
-| name | text | yes | — | non-empty | — | Institute display name |
-| upi_id | text | no | null | basic UPI ID format check | — | Shown in reminder messages once set |
-| bank_details | text | no | null | — | — | Optional free-text fallback (account no./IFSC etc.) |
-| created_at | timestamptz | yes | now() | — | — | |
+### Table: `users`
+- `id` — integer/uuid — required — primary key.
+- `username` — text — required — unique — validation: non-empty, reasonable length, no spaces.
+- `password_hash` — text — required — bcrypt hash, never the plain password.
+- `is_admin` — boolean — required — default `false`.
+- `created_at` — timestamp — auto-set on insert.
+- Indexes: unique index on `username` (for both uniqueness enforcement and fast login lookups).
 
-### Table: admins
-- Purpose: One admin user belonging to a tenant.
-| Column | Type | Required | Default | Validation | Unique | Notes |
-|---|---|---|---|---|---|---|
-| id | uuid | yes | generated | — | PK | |
-| tenant_id | uuid | yes | — | must exist in tenants | FK → tenants.id | |
-| password_hash | text | yes | — | — | — | Salted hash, never plain text |
-| email | text | yes | — | valid email format | unique | |
-| created_at | timestamptz | yes | now() | — | — | |
+### Table: `habits`
+- `id` — integer — required — primary key.
+- `user_id` — integer — required — foreign key -> `users.id`.
+- `name` — text — required — non-empty, max length ~100.
+- `target_frequency` — text — required — default `"daily"` (e.g. `"daily"`, `"3x_week"`).
+- `is_archived` — boolean — required — default `false`.
+- `created_at` — timestamp — auto-set.
+- Indexes: `(user_id, is_archived)` for fast "today's active habits" lookups.
 
-### Table: students
-- Purpose: A student whose fees are tracked.
-| Column | Type | Required | Default | Validation | Unique | Notes |
-|---|---|---|---|---|---|---|
-| id | uuid | yes | generated | — | PK | |
-| tenant_id | uuid | yes | — | must exist in tenants | FK → tenants.id | |
-| name | text | yes | — | non-empty | — | |
-| parent_phone | text | yes | — | valid phone format (E.164 recommended) | — | Required — reminders depend on this |
-| note | text | no | null | — | — | e.g. sibling discount note |
-| created_at | timestamptz | yes | now() | — | — | |
-| updated_at | timestamptz | yes | now() | — | — | |
+### Table: `habit_checkins`
+- `id` — integer — required — primary key.
+- `habit_id` — integer — required — foreign key -> `habits.id`.
+- `date` — date (ISO) — required.
+- `created_at` — timestamp — auto-set.
+- Unique constraint: `(habit_id, date)`.
+- Index: `(habit_id, date)`.
+- Semantics: a row existing means "completed that day"; un-checking deletes the row (same approach as the earlier simpler design).
 
-### Table: fees
-- Purpose: A fee obligation (one-time or installment) assigned to a student.
-| Column | Type | Required | Default | Validation | Unique | Notes |
-|---|---|---|---|---|---|---|
-| id | uuid | yes | generated | — | PK | |
-| tenant_id | uuid | yes | — | must exist in tenants | FK → tenants.id | Denormalized for query/isolation simplicity |
-| student_id | uuid | yes | — | must exist in students | FK → students.id | |
-| amount | numeric(10,2) | yes | — | > 0 | — | In INR |
-| due_date | date | yes | — | — | — | |
-| status | text | yes | 'pending' | one of: pending, paid, overdue | — | `overdue` derived when due_date passes unpaid; `paid` set manually by admin in v1 |
-| paid_at | timestamptz | no | null | — | — | Set when admin marks paid |
-| created_at | timestamptz | yes | now() | — | — | |
-| updated_at | timestamptz | yes | now() | — | — | |
+### Table: `todos`
+- `id` — integer — required — primary key.
+- `user_id` — integer — required — foreign key -> `users.id`.
+- `title` — text — required — non-empty.
+- `due_date` — date — optional.
+- `priority` — text — required — default `"medium"` — one of `"low" | "medium" | "high"`.
+- `recurrence` — text — required — default `"one_time"` — one of `"one_time" | "daily" | "weekly" | "monthly"`.
+- `is_completed` — boolean — required — default `false` (for one-time todos; recurring todos use `todo_completions` below instead).
+- `created_at` — timestamp — auto-set.
+- Indexes: `(user_id, due_date)`; `(user_id, recurrence)`.
 
-### Table: reminders
-- Purpose: A log of WhatsApp reminders sent for a fee (for history/audit, per App Flow's Student Detail history).
-| Column | Type | Required | Default | Validation | Unique | Notes |
-|---|---|---|---|---|---|---|
-| id | uuid | yes | generated | — | PK | |
-| tenant_id | uuid | yes | — | must exist in tenants | FK → tenants.id | |
-| fee_id | uuid | yes | — | must exist in fees | FK → fees.id | |
-| sent_at | timestamptz | yes | now() | — | — | |
+### Table: `todo_completions` (for recurring todos — tracks completion per period)
+- `id` — integer — required — primary key.
+- `todo_id` — integer — required — foreign key -> `todos.id`.
+- `period_start` — date — required — the start date of the day/week/month period this completion applies to.
+- `completed_at` — timestamp — required — when it was marked done.
+- Unique constraint: `(todo_id, period_start)` — one completion record per recurring todo per period.
+- Purpose: lets "leftover" detection compare, for each recurring todo, whether a `todo_completions` row exists for the most recently *ended* period.
+
+### Table: `journal_entries`
+- `id` — integer — required — primary key.
+- `user_id` — integer — required — foreign key -> `users.id`.
+- `date` — date — required.
+- `content` — text — required (can be short).
+- `updated_at` — timestamp — auto-updated on edit.
+- Unique constraint: `(user_id, date)` — one entry per user per day.
+
+### Table: `timer_sessions`
+- `id` — integer — required — primary key.
+- `user_id` — integer — required — foreign key -> `users.id`.
+- `completed_at` — timestamp — required — set when a session runs to completion (not on manual reset).
+- `duration_minutes` — integer — required — default 25.
+- Index: `(user_id, completed_at)` for daily/weekly session counts.
 
 ## 4. Relationships
-- tenants (1) → admins (many)
-- tenants (1) → students (many)
-- students (1) → fees (many)
-- fees (1) → reminders (many)
-- Delete behaviour: Deleting a student cascades to delete their fees and reminders (a student record removal should not leave orphaned records). Deleting a tenant is not supported via the app (would require manual/administrative action, not exposed in v1 UI).
+- One-to-many: `users` -> `habits`, `habits` -> `habit_checkins`, `users` -> `todos`, `todos` -> `todo_completions`, `users` -> `journal_entries`, `users` -> `timer_sessions`.
+- Delete behavior: Habits and todos are archived/soft-deleted where the PRD calls for it (habits explicitly; todos can hard-delete since there's no stated need to preserve deleted-task history). Deleting a `user` (not expected in normal v1 use) would cascade to all their owned rows.
 
 ## 5. Access Rules
-| Table | Create | Read | Update | Delete |
-|---|---|---|---|---|
-| tenants | System only (on signup) | Own tenant only | Own tenant's admin (payment info fields) | Not exposed |
-| admins | System only (on signup) | Own tenant's admins | Own record only | Not exposed in v1 |
-| students | Own tenant's admin | Own tenant only | Own tenant's admin | Own tenant's admin |
-| fees | Own tenant's admin | Own tenant only | Own tenant's admin (including manual status change) | Own tenant's admin |
-| reminders | System (on reminder send) | Own tenant only | Not applicable | Not exposed |
-
-All access rules are enforced server-side using the authenticated admin's `tenant_id`; recommend also enforcing tenant scoping at the database level (e.g. PostgreSQL row-level security) as a second line of defense.
+- `users`: a user can read/update only their own row (e.g. changing password later); admins can read all rows via the Admin Panel endpoint only.
+- `habits`, `habit_checkins`, `todos`, `todo_completions`, `journal_entries`, `timer_sessions`: create/read/update/delete restricted to the owning `user_id`, enforced server-side on every request — never trust a `user_id` sent from the frontend, always derive it from the validated session.
+- Leaderboard: a special read-only aggregate query across all users' `habits`/`habit_checkins` to compute each user's best current/longest streak — does not expose raw habit names or other users' private data, only username + streak number.
 
 ## 6. Core Data Operations
-- Create student + initial fee (combined operation from the Add Student form).
-- Set/update institute payment info (`tenants.upi_id` / `bank_details`) from Settings screen.
-- Query dues dashboard: fetch all fees for the tenant with status `pending` or `overdue`, joined with student name/phone, sorted by `due_date` ascending.
-- Send reminder: build a wa.me URL client-side from student phone + amount + due date + tenant payment info → insert a `reminders` row.
-- Mark as paid: update `fees.status` to `paid` and set `paid_at`; allow a short-window revert (undo) back to its prior status.
-- Nightly/periodic job: mark any `fees` past `due_date` and still `pending` as `overdue`.
+- `CreateUser(username, password)` — hashes password, inserts into `users`.
+- `AuthenticateUser(username, password)` — looks up by username, compares hash, issues session.
+- `RecordHabitCheckin(habit_id, date)` / `RemoveHabitCheckin(habit_id, date)` — same as the earlier simpler design.
+- `CalculateHabitStreaks(habit_id)` — application logic over `habit_checkins`, same approach as before.
+- `CreateTodo(...)`, `UpdateTodo(...)`, `DeleteTodo(...)` — standard CRUD, scoped to `user_id`.
+- `RecordTodoCompletion(todo_id, period_start)` — for recurring todos, inserts into `todo_completions` for the current period.
+- `GetLeftovers(user_id)` — for each active recurring todo, determines the most recently *ended* period (e.g. yesterday for daily, last week for weekly, last month for monthly) and checks whether a matching `todo_completions` row exists; if not, includes it in the leftover list.
+- `GetLeaderboard(metric)` — aggregates best current/longest streak per user across their habits, sorted descending.
+- `LogTimerSession(user_id)` — inserts a row when a timer completes naturally.
+- `GetOrCreateJournalEntry(user_id, date)` / `SaveJournalEntry(user_id, date, content)`.
 
 ## 7. File Storage
-- Optional in v1: a QR code image for the institute's UPI ID could be stored (e.g. Supabase Storage) if the admin wants to attach a scannable QR rather than just a typed UPI ID — not required for launch.
+- Not applicable — no file uploads anywhere in this app.
 
 ## 8. Data Integrity and Security
-- Validation: Phone number format, amount > 0, and due_date presence enforced both client-side (UX) and server-side (integrity) before writes.
-- Transactions: Not heavily needed in v1 without a payment gateway; still wrap multi-field updates (e.g. mark-as-paid setting both `status` and `paid_at`) in a single statement/transaction for consistency.
-- Sensitive data: `parent_phone` and fee amounts are the most sensitive fields — access strictly tenant-scoped; no field-level encryption planned for v1 given pilot scale.
-- Audit requirements: `reminders` table functions as a lightweight audit log of contact attempts; `fees.paid_at` provides a simple payment-marking audit trail.
+- Validation: enforced both client-side (fast feedback) and server-side (source of truth) — never trust client-side validation alone.
+- Transactions: recommended around any multi-step write (e.g. creating a user + initial setup, if that ever exists) to avoid partial writes.
+- Sensitive data: passwords are the only sensitive field; always hashed, never returned by any API response, never logged.
+- Audit requirements: none required for v1 beyond `created_at`/`updated_at` timestamps already present on relevant tables.
 
 ## 9. Migration and Seed Data
-- Initial migration creates all tables above with foreign keys and constraints as specified.
-- Seed data for development/demo: one sample tenant (with UPI ID set), one admin, a handful of sample students with a mix of paid/pending/overdue fees to demo the dashboard sorting and status logic.
+- Migrations: a single setup script (or Supabase's migration tooling) creating all tables above; run once against the free-tier Supabase project.
+- Seed data: none required — each user's data starts empty on signup.
 
 ## 10. Risks and Open Questions
-- Deferred (v2): A `payments` table tied to a payment gateway (fields like `gateway_reference`, webhook-driven `status`) is intentionally not part of this schema yet. When added later, it will reference `fees.id` the same way `reminders` does now, and `fees.status` will start being set automatically instead of manually.
-- Open question: Whether recurring/installment fees need a separate `fee_schedule` concept beyond one row per due date — v1 assumption is one `fees` row per due date, revisit once actual coaching-center fee structures are tested with the pilot.
+- Risk: `GetLeftovers` and streak calculation are the two places with real date-logic complexity — isolate both into clearly named, independently testable functions rather than inlining date math throughout the codebase.
+- Open question: Week-start convention (Monday vs. Sunday) for `period_start` on weekly recurrence — pin this down as one explicit constant before implementing leftover tracking, since it affects every weekly todo's boundary calculation.
+- Open question: For the leaderboard's "best streak," decide whether archived habits still count toward a user's best streak, or only active ones — recommend: active habits only, to avoid rewarding streaks on habits someone has since abandoned.
