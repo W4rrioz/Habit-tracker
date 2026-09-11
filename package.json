@@ -6,7 +6,7 @@
     "dev": "concurrently \"npm run dev:client\" \"npm run dev:server\"",
     "dev:client": "npm --prefix client run dev",
     "dev:server": "npm --prefix server run dev",
-    "build": "npm --prefix client install && npm --prefix client run build && node -e \"import('fs').then(fs => fs.cpSync('client/dist', 'dist', {recursive: true}))\"",
+    "build": "npm --prefix client install && npm --prefix client run build",
     "start": "node server/index.js",
     "seed": "npm --prefix server run seed",
     "install:all": "npm install && npm --prefix client install && npm --prefix server install"
@@ -20,7 +20,6 @@
     "express": "^4.21.0",
     "jsonwebtoken": "^9.0.2",
     "pg": "^8.23.0",
-    "serverless-http": "^4.0.0",
     "sql.js": "^1.12.0",
     "uuid": "^11.1.0"
   },
