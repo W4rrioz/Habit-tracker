@@ -14,13 +14,19 @@ pg.types.setTypeParser(1082, (val) => val);
 
 const connectionString = process.env.DATABASE_URL;
 
+if (!connectionString) {
+  console.error('\n❌ CRITICAL: DATABASE_URL environment variable is missing!');
+  console.error('Please add DATABASE_URL in your Render dashboard under "Environment".\n');
+}
+
 export const pool = new pg.Pool({
   connectionString,
-  ssl: { rejectUnauthorized: false },
+  ssl: connectionString && connectionString.includes('localhost') ? false : { rejectUnauthorized: false },
   max: 10,
   idleTimeoutMillis: 30000,
   connectionTimeoutMillis: 10000,
 });
+
 
 pool.on('error', (err) => {
   console.error('Unexpected error on idle PostgreSQL client', err);
