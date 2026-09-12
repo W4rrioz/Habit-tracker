@@ -2,7 +2,7 @@ import { createContext, useContext, useEffect, useState } from 'react';
 
 const ThemeContext = createContext(null);
 
-const THEME_KEY = 'feereminder_theme';
+const THEME_KEY = 'habittrack_theme';
 
 export function ThemeProvider({ children }) {
   const [theme, setTheme] = useState(() => {

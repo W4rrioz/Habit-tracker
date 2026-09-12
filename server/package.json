@@ -1,12 +1,12 @@
 {
-  "name": "fee-reminder-server",
+  "name": "habittrack-server",
   "private": true,
   "version": "0.1.0",
   "type": "module",
   "scripts": {
     "dev": "node --watch index.js",
     "start": "node index.js",
-    "seed": "node scripts/seed.js"
+    "seed": "node scripts/seed-admin.js"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.116.0",
