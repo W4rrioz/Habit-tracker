@@ -1,6 +1,8 @@
 import React from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import AppLayout from './components/AppLayout';
+import ProtectedRoute from './components/ProtectedRoute';
+import PublicOnlyRoute from './components/PublicOnlyRoute';
 
 import DashboardPage from './pages/DashboardPage';
 import LoginPage from './pages/LoginPage';
@@ -18,32 +20,36 @@ import AdminPage from './pages/AdminPage';
 export default function App() {
   return (
     <Routes>
-      {/* Public Auth Pages */}
-      <Route path="/login" element={<LoginPage />} />
-      <Route path="/signup" element={<SignUpPage />} />
+      {/* Public Auth Pages (Redirect to / if already logged in) */}
+      <Route element={<PublicOnlyRoute />}>
+        <Route path="/login" element={<LoginPage />} />
+        <Route path="/signup" element={<SignUpPage />} />
+      </Route>
 
-      {/* Main App Layout Routes */}
-      <Route element={<AppLayout />}>
-        <Route path="/" element={<DashboardPage />} />
-        
-        {/* Habits */}
-        <Route path="/habits" element={<HabitsPage />} />
-        <Route path="/habits/new" element={<HabitFormPage />} />
-        <Route path="/habits/:id" element={<HabitDetailPage />} />
-        <Route path="/habits/:id/edit" element={<HabitFormPage />} />
+      {/* Protected App Routes (Redirect to /login if not logged in) */}
+      <Route element={<ProtectedRoute />}>
+        <Route element={<AppLayout />}>
+          <Route path="/" element={<DashboardPage />} />
+          
+          {/* Habits */}
+          <Route path="/habits" element={<HabitsPage />} />
+          <Route path="/habits/new" element={<HabitFormPage />} />
+          <Route path="/habits/:id" element={<HabitDetailPage />} />
+          <Route path="/habits/:id/edit" element={<HabitFormPage />} />
 
-        {/* Todos */}
-        <Route path="/todos" element={<TodosPage />} />
-        <Route path="/todos/new" element={<TodoFormPage />} />
-        <Route path="/todos/:id/edit" element={<TodoFormPage />} />
+          {/* Todos */}
+          <Route path="/todos" element={<TodosPage />} />
+          <Route path="/todos/new" element={<TodoFormPage />} />
+          <Route path="/todos/:id/edit" element={<TodoFormPage />} />
 
-        {/* Focus Timer & Journal */}
-        <Route path="/timer" element={<FocusTimerPage />} />
-        <Route path="/journal" element={<JournalPage />} />
+          {/* Focus Timer & Journal */}
+          <Route path="/timer" element={<FocusTimerPage />} />
+          <Route path="/journal" element={<JournalPage />} />
 
-        {/* Leaderboard & Admin */}
-        <Route path="/leaderboard" element={<LeaderboardPage />} />
-        <Route path="/admin" element={<AdminPage />} />
+          {/* Leaderboard & Admin */}
+          <Route path="/leaderboard" element={<LeaderboardPage />} />
+          <Route path="/admin" element={<AdminPage />} />
+        </Route>
       </Route>
 
       {/* Fallback */}

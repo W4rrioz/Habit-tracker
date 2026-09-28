@@ -1,5 +1,5 @@
-﻿import React, { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import React, { useState } from 'react';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
 export default function LoginPage() {
@@ -11,6 +11,8 @@ export default function LoginPage() {
 
   const { login } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+  const from = location.state?.from?.pathname || '/';
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -23,7 +25,7 @@ export default function LoginPage() {
     setLoading(true);
     try {
       await login(username.trim(), password);
-      navigate('/');
+      navigate(from, { replace: true });
     } catch (err) {
       setError(err.message || 'Failed to sign in.');
     } finally {

@@ -1,5 +1,5 @@
-﻿import React, { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import React, { useState } from 'react';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
 export default function SignUpPage() {
@@ -13,6 +13,8 @@ export default function SignUpPage() {
 
   const { signup } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+  const from = location.state?.from?.pathname || '/';
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -34,7 +36,7 @@ export default function SignUpPage() {
     setLoading(true);
     try {
       await signup(username.trim(), password);
-      navigate('/');
+      navigate(from, { replace: true });
     } catch (err) {
       setError(err.message || 'Failed to create account.');
     } finally {
